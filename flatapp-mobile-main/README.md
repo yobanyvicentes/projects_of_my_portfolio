@@ -1,147 +1,133 @@
 # FlatNZ Mobile
 
-Native mobile companion app for FlatNZ, built with .NET MAUI Blazor Hybrid.
+FlatNZ Mobile is the native mobile companion app for FlatNZ, built with **.NET MAUI Blazor Hybrid**.
 
-FlatNZ helps flatmates manage a shared home from a mobile-first experience: authentication, flats, members, join requests, chores, shopping, finance, receipts, and activity.
+It is designed for flatmates who need a practical mobile-first tool to manage shared living: home setup, member access, chores, shopping, expenses, receipts, and activity tracking, all connected to a Laravel backend API.
+
+---
+
+## What this project is
+
+FlatNZ Mobile is part of the wider **FlatNZ ecosystem**, a flatmate management platform focused on real shared-house workflows.
+
+The mobile app is not just a demo shell. It already supports core user and household operations such as:
+
+- authentication
+- flat creation and join flows
+- join request review
+- member visibility
+- chores
+- shopping
+- finance and balances
+- receipts
+- activity history
+- privacy and account deletion flows
+
+This repository is mainly intended for:
+
+- technical reviewers
+- recruiters evaluating architecture and implementation quality
+- developers maintaining or extending the mobile app
+- testers generating Android review builds
+
+---
+
+## Product focus
+
+FlatNZ helps flatmates reduce friction in shared living by centralising the kinds of tasks that usually get scattered across chats, screenshots, notes, and bank transfers.
+
+The mobile experience is focused on:
+
+- clear household ownership and membership flows
+- shared task coordination
+- shopping-to-finance continuity
+- receipt-backed expense tracking
+- admin review flows for access requests
+- privacy and account controls appropriate for store publishing
+
+---
 
 ## Current capabilities
 
-The mobile app currently includes:
+The app currently includes:
 
-- Login, registration, logout, and secure token storage.
-- Create flat and join flat request flows.
-- Current flat switching support through the backend API.
-- Invite-code display and clipboard copy.
-- Admin join-request review with approve/reject actions.
-- Members screen with active flatmates and roles.
-- Activity log screen and dashboard activity preview.
-- Dashboard with flat management, finance, and module shortcuts.
-- Bottom navigation for Home, Chores, Shopping, Finance, and Settings.
-- Chores list, create, edit, complete, and archive flows.
-- Shopping list add, remove/reactivate, and purchase-to-finance flow.
-- Finance expenses, balances, settlements/payments, and receipt management.
-- Receipt upload for JPG, PNG, and PDF files.
-- Styled FlatNZ confirmation dialogs for sensitive actions.
-- Dark mobile-first UI using black, white, and bright blue accents.
+### Authentication and account
+- Login
+- Registration
+- Logout
+- Secure token storage
+- In-app privacy policy
+- In-app account deletion request flow
+
+### Flats and membership
+- Create flat flow
+- Join flat request flow
+- Current flat switching
+- Invite-code display
+- Clipboard copy for invite codes
+- Members screen with active flatmates and roles
+- Admin join-request review with approve/reject actions
+
+### Household operations
+- Dashboard with module shortcuts
+- Activity preview and activity log screen
+- Bottom navigation for Home, Chores, Shopping, Finance, and Settings
+
+### Chores
+- List chores
+- Create chores
+- Edit chores
+- Complete chores
+- Archive/remove chores
+
+### Shopping
+- Add shopping items
+- Deactivate/reactivate items
+- Purchase flow connected to finance
+
+### Finance and receipts
+- Expense tracking
+- Balances
+- Settlements/payments
+- Receipt management
+- Receipt upload for JPG, PNG, and PDF
+
+### UX
+- Styled confirmation dialogs for sensitive actions
+- Mobile-first dark UI with black, white, and bright blue accents
+
+---
 
 ## Tech stack
 
-- .NET MAUI
-- Blazor Hybrid
-- C#
-- Typed HTTP services
-- Laravel API backend
-- Laravel Sanctum bearer-token authentication
+- **.NET MAUI**
+- **Blazor Hybrid**
+- **C#**
+- **Typed HTTP services**
+- **Laravel API backend**
+- **Laravel Sanctum bearer-token authentication**
+
+---
+
+## Architecture notes
+
+The app uses a service-oriented mobile structure where UI pages call typed HTTP services instead of mixing transport logic directly into the components.
+
+Key project areas include:
+
+- `Components/` for pages and UI composition
+- `Services/` for domain-specific API access
+- `Configuration/` for runtime settings such as API base URL
+- `Resources/` for app icons, splash assets, images, and fonts
+- `Platforms/` for Android and platform-specific configuration
+
+This structure makes the project easier to review, maintain, and evolve.
+
+---
 
 ## API base URL
 
-The mobile app calls the Laravel API at:
+The mobile app currently targets:
 
 ```txt
 https://flat.yobany.top/api
-```
-
-The default URL is configured in:
-
-```txt
-FlatApp.Mobile/FlatApp.Mobile/Configuration/ApiSettings.cs
-```
-
-For local or staging testing, set the optional `FLATNZ_API_URL` environment variable before running the app. If the variable is missing, the app falls back to the production API URL.
-
-```bash
-export FLATNZ_API_URL="https://your-staging-domain.test/api"
-dotnet build -t:Run -f net10.0-android
-```
-
-Android emulators usually cannot call `localhost` directly. Use the host machine address available to the emulator or a tunneled HTTPS URL.
-
-## Main backend endpoints used
-
-```txt
-POST   /api/auth/register
-POST   /api/auth/login
-POST   /api/auth/logout
-GET    /api/auth/me
-
-GET    /api/flats/current
-POST   /api/flats/current
-POST   /api/flats
-POST   /api/flats/join
-GET    /api/flats/current/members
-GET    /api/flats/current/join-requests
-POST   /api/flats/current/join-requests/{joinRequest}/approve
-POST   /api/flats/current/join-requests/{joinRequest}/reject
-
-GET    /api/activity
-
-GET    /api/chores
-POST   /api/chores
-PUT    /api/chores/{chore}
-POST   /api/chores/{chore}/complete
-DELETE /api/chores/{chore}
-
-GET    /api/shopping
-POST   /api/shopping
-PUT    /api/shopping/{item}
-DELETE /api/shopping/{item}
-POST   /api/shopping/{item}/deactivate
-POST   /api/shopping/{item}/reactivate
-POST   /api/shopping/{item}/purchase
-
-GET    /api/finance
-POST   /api/finance/expenses
-PUT    /api/finance/expenses/{expense}
-DELETE /api/finance/expenses/{expense}
-POST   /api/finance/settlements
-DELETE /api/finance/settlements/{settlement}
-
-GET    /api/receipts
-POST   /api/receipts
-DELETE /api/receipts/{receipt}
-```
-
-## Running the app
-
-From the repository root:
-
-```bash
-cd FlatApp.Mobile/FlatApp.Mobile
-dotnet restore
-dotnet build -f net10.0-android
-```
-
-To run on a connected Android device or emulator:
-
-```bash
-dotnet build -t:Run -f net10.0-android
-```
-
-## Android release build
-
-A basic release build can be created with:
-
-```bash
-dotnet publish -f net10.0-android -c Release
-```
-
-See `docs/ANDROID_RELEASE.md` for a release checklist before sharing a reviewable Android build.
-
-## Backend deployment reminders
-
-When backend routes change, deploy the Laravel API and clear caches:
-
-```bash
-php artisan route:clear
-php artisan config:clear
-php artisan optimize:clear
-```
-
-## Product direction
-
-The next useful improvements are:
-
-- Finance-specific styled delete confirmations.
-- In-app notifications.
-- More complete member role management if supported by the backend.
-- Android signing and release documentation.
