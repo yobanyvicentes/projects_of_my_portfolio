@@ -1,0 +1,18 @@
+# 1. CORRER EL COMANDO npm install
+# 2. CREAR CUENTA EN AUTH0, CREAR UNA APP TIPO SPA Y OBTENER EL DOMAIN ASÍ COMO EL CLIENT ID
+
+# 3. CREAR EL .env EN LA RAIZ DEL PROYECTO Y AGRAGR LAS SIGUIENTES VARIABLES
+
+REACT_APP_DOMAIN=
+REACT_APP_CLIENT_ID=
+
+# 4. PONERLES LOS VALORES QUE SE OBTENGAN DE AUTH0
+
+# 5. AGREGAR LA SIGUIENTE VARIABLE DE ENTORNO PARA EL SERVIDOR, CAMBIARLE EL PUERTO SI ELIGIERON OTRO
+REACT_APP_REDIRECT_URI=http://localhost:3000/
+
+# 6. CORRER EL COMANDO npm start PARA CORRER LA APP
+Luego de logearse, el sistema arrojar error si no está conectada al backend.
+Esta app es el frontend y su respectivo backend se encuentra en https://github.com/yobanyvicentes/back_tres
+
+

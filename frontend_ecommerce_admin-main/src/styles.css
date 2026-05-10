@@ -1,0 +1,50 @@
+body{
+    background-color: rgb(70, 70, 73);
+}
+
+.truncate{
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.card-login{
+    height: 370px;
+    margin-top: auto;
+    margin-bottom: auto;
+    width: 400px;
+    background-color: rgba(0.5,0.5,0.5,0.6);
+    color: white;
+}
+
+.card{
+    box-shadow: 0px 8px 8px lightgrey;
+}
+
+.card-container{
+    height: 380px;
+    min-width: 250px;
+}
+
+.card:hover{
+    box-shadow: 0px 8px 8px grey;
+}
+
+.card img{
+margin: auto;
+height: 200px;
+width: 200px;
+}
+.card .card-title{
+    margin: 0px;
+}
+
+.card .card-text{
+    margin: 0px;
+}
+
+.header-section{
+    color: white;
+    text-align: center;
+}

@@ -1,0 +1,10 @@
+# CREAR UN ARCHIVO .env en la raíz del proyecto y agregar las siguientes variables de entorno con los valores que corresponda:
+PORT=
+USER=
+DB=
+PASS=
+
+# PORT: ES EL PUERTO DONDE CORRE LA APP
+# USER: ES EL USUARIO DE LA BD EN MONGO ATLAS
+# DB: ES EL NOMBRE DE LA BASE DE DATOS EN MONGO ATLAS
+# PASS: ES LA CONTRASEÑA DEL USUARIO EN MONGO ATLAS

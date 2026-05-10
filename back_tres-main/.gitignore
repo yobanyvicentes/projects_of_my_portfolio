@@ -1,0 +1,8 @@
+# Ignorar los archivos relacionados a API keys
+.env
+
+/node_modules
+node_modules/
+
+package-lock.json
+
