@@ -1,0 +1,406 @@
+@page "/receipts/upload"
+@inject FlatApp.Mobile.Services.Finance.IFinanceService FinanceService
+@inject FlatApp.Mobile.Services.Receipts.IReceiptService ReceiptService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card receipt-upload-page">
+    <p class="status-label">Receipts</p>
+    <h1>Upload receipt</h1>
+    <p>Attach a JPG, PNG, or PDF receipt to your current flat. Files must be under 3 MB.</p>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="alert alert-success">@successMessage</div>
+        <div class="status-card compact-status receipt-success-card">
+            <p class="status-label">Receipt saved</p>
+            <h2>Uploaded successfully</h2>
+            <p>You can review it in Finance or upload another receipt for this flat.</p>
+            <div class="hero-actions">
+                <a class="primary-button" href="finance">View finance</a>
+                <button type="button" class="secondary-button" @onclick="ResetSuccessState">Upload another</button>
+            </div>
+        </div>
+    }
+
+    <div class="receipt-guidance-card">
+        <div>
+            <p class="status-label">Accepted files</p>
+            <h2>Keep proof of shared expenses</h2>
+            <p>Upload receipts for groceries, utilities, rent-related costs, or shared purchases. You can optionally link a receipt to an existing expense.</p>
+        </div>
+        <span>JPG · PNG · PDF</span>
+    </div>
+
+    <EditForm Model="form" OnValidSubmit="UploadAsync" class="auth-form receipt-upload-form">
+        <DataAnnotationsValidator />
+
+        <div class="receipt-form-section">
+            <p class="status-label">Receipt details</p>
+
+            <div class="form-group">
+                <label for="receipt-title">Title</label>
+                <InputText id="receipt-title" class="flat-input" @bind-Value="form.Title" placeholder="Example: Countdown groceries" />
+                <ValidationMessage For="() => form.Title" />
+            </div>
+
+            <div class="form-grid-two">
+                <div class="form-group">
+                    <label for="receipt-amount">Amount optional</label>
+                    <InputNumber id="receipt-amount" class="flat-input" @bind-Value="form.Amount" />
+                    <ValidationMessage For="() => form.Amount" />
+                </div>
+
+                <div class="form-group">
+                    <label for="receipt-expense">Attach to expense optional</label>
+                    <InputSelect id="receipt-expense" class="flat-input" @bind-Value="form.ExpenseId">
+                        <option value="0">No linked expense</option>
+                        @foreach (var expense in expenses)
+                        {
+                            <option value="@expense.Id">@expense.Title · @Money(expense.Amount)</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+        </div>
+
+        @if (expenses.Count == 0)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">No expenses yet</p>
+                <p>You can upload this receipt without linking it, or create an expense in Finance first.</p>
+            </div>
+        }
+
+        <div class="receipt-file-card">
+            <div>
+                <p class="status-label">Selected file</p>
+                <h2>@SelectedFileTitle</h2>
+                <p>@SelectedFileHint</p>
+            </div>
+            <button type="button" class="secondary-button" @onclick="PickFileAsync" disabled="@isSubmitting">
+                Pick file
+            </button>
+        </div>
+
+        <div class="hero-actions">
+            <button type="submit" class="primary-button" disabled="@(isSubmitting || pickedFile is null)">
+                @(isSubmitting ? "Uploading..." : "Upload receipt")
+            </button>
+            <a class="secondary-button" href="finance">Back to finance</a>
+        </div>
+    </EditForm>
+</section>
+
+<style>
+    .receipt-upload-page {
+        padding-bottom: 7rem;
+    }
+
+    .receipt-guidance-card,
+    .receipt-upload-form,
+    .receipt-form-section,
+    .receipt-file-card {
+        border: 1px solid var(--flat-border);
+        border-radius: 1.2rem;
+        background: color-mix(in srgb, var(--flat-card) 92%, transparent);
+    }
+
+    .receipt-guidance-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 1rem;
+        align-items: center;
+        margin-top: 1rem;
+        padding: 1rem;
+        border-color: color-mix(in srgb, var(--flat-primary) 35%, var(--flat-border));
+        background: color-mix(in srgb, var(--flat-primary) 7%, var(--flat-card));
+    }
+
+    .receipt-guidance-card h2,
+    .receipt-guidance-card p,
+    .receipt-file-card h2,
+    .receipt-file-card p {
+        margin: 0;
+    }
+
+    .receipt-guidance-card h2,
+    .receipt-file-card h2 {
+        color: var(--flat-text);
+        font-size: 1.2rem;
+    }
+
+    .receipt-guidance-card p:last-child,
+    .receipt-file-card p:last-child {
+        color: var(--flat-muted);
+    }
+
+    .receipt-guidance-card > span {
+        padding: .35rem .7rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        color: var(--flat-primary);
+        font-size: .72rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .receipt-upload-form {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding: 1rem;
+    }
+
+    .receipt-form-section {
+        display: grid;
+        gap: .85rem;
+        padding: 1rem;
+    }
+
+    .receipt-file-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 1rem;
+        align-items: center;
+        padding: 1rem;
+    }
+
+    .receipt-success-card {
+        border-color: color-mix(in srgb, var(--flat-primary) 35%, var(--flat-border));
+    }
+
+    @@media (max-width: 430px) {
+        .receipt-guidance-card,
+        .receipt-file-card {
+            grid-template-columns: 1fr;
+        }
+
+        .receipt-guidance-card > span {
+            justify-self: start;
+        }
+    }
+</style>
+
+@code {
+    private const long MaxReceiptBytes = 3 * 1024 * 1024;
+    private static readonly string[] AllowedExtensions = [".jpg", ".jpeg", ".png", ".pdf"];
+
+    private readonly UploadReceiptForm form = new();
+    private FileResult? pickedFile;
+    private long? pickedFileSize;
+    private bool isSubmitting;
+    private string? errorMessage;
+    private string? successMessage;
+    private List<FlatApp.Mobile.Models.Finance.FinanceExpense> expenses = [];
+
+    private string SelectedFileText => pickedFile is null
+        ? "No file selected yet."
+        : pickedFileSize is null
+            ? pickedFile.FileName
+            : $"{pickedFile.FileName} · {FormatFileSize(pickedFileSize.Value)}";
+
+    private string SelectedFileTitle => pickedFile is null ? "No file selected" : pickedFile.FileName;
+
+    private string SelectedFileHint => pickedFile is null
+        ? "Accepted formats: JPG, PNG, PDF. Maximum size: 3 MB."
+        : pickedFileSize is null
+            ? "File selected and ready to upload."
+            : $"Ready to upload · {FormatFileSize(pickedFileSize.Value)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var finance = await FinanceService.GetAsync();
+            expenses = finance?.Expenses?.ToList() ?? [];
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private async Task PickFileAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+        pickedFileSize = null;
+
+        try
+        {
+            var file = await FilePicker.Default.PickAsync(new PickOptions
+            {
+                PickerTitle = "Choose a receipt",
+                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    [DevicePlatform.Android] = ["image/jpeg", "image/png", "application/pdf"],
+                    [DevicePlatform.iOS] = ["public.jpeg", "public.png", "com.adobe.pdf"],
+                    [DevicePlatform.MacCatalyst] = ["public.jpeg", "public.png", "com.adobe.pdf"],
+                    [DevicePlatform.WinUI] = [".jpg", ".jpeg", ".png", ".pdf"],
+                }),
+            });
+
+            if (file is null)
+            {
+                return;
+            }
+
+            var validationError = await ValidatePickedFileAsync(file);
+
+            if (!string.IsNullOrWhiteSpace(validationError))
+            {
+                pickedFile = null;
+                pickedFileSize = null;
+                errorMessage = validationError;
+                return;
+            }
+
+            pickedFile = file;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to open the file picker.";
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private async Task UploadAsync()
+    {
+        if (pickedFile is null)
+        {
+            errorMessage = "Pick a receipt file first.";
+            return;
+        }
+
+        var validationError = await ValidatePickedFileAsync(pickedFile);
+
+        if (!string.IsNullOrWhiteSpace(validationError))
+        {
+            errorMessage = validationError;
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await using var stream = await pickedFile.OpenReadAsync();
+            await ReceiptService.UploadAsync(
+                form.Title.Trim(),
+                form.Amount,
+                pickedFile.FileName,
+                ContentTypeFor(pickedFile.FileName, pickedFile.ContentType),
+                stream,
+                form.ExpenseId == 0 ? null : form.ExpenseId);
+
+            successMessage = "Receipt uploaded.";
+            pickedFile = null;
+            pickedFileSize = null;
+            form.Title = string.Empty;
+            form.Amount = null;
+            form.ExpenseId = 0;
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to upload the receipt.");
+            Console.WriteLine($"Receipt upload failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to upload the receipt. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ResetSuccessState()
+    {
+        successMessage = null;
+        errorMessage = null;
+        pickedFile = null;
+        pickedFileSize = null;
+        form.Title = string.Empty;
+        form.Amount = null;
+        form.ExpenseId = 0;
+    }
+
+    private async Task<string?> ValidatePickedFileAsync(FileResult file)
+    {
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+        if (!AllowedExtensions.Contains(extension))
+        {
+            return "Choose a JPG, PNG, or PDF receipt file.";
+        }
+
+        await using var stream = await file.OpenReadAsync();
+        pickedFileSize = stream.Length;
+
+        if (pickedFileSize > MaxReceiptBytes)
+        {
+            return "Choose a receipt under 3 MB.";
+        }
+
+        return null;
+    }
+
+    private static string ContentTypeFor(string fileName, string? contentType)
+    {
+        if (!string.IsNullOrWhiteSpace(contentType))
+        {
+            return contentType;
+        }
+
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+
+        return extension switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".pdf" => "application/pdf",
+            _ => "application/octet-stream",
+        };
+    }
+
+    private static string Money(decimal amount)
+    {
+        return $"${amount:0.00}";
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        return bytes >= 1024 * 1024
+            ? $"{bytes / 1024m / 1024m:0.0} MB"
+            : $"{bytes / 1024m:0.0} KB";
+    }
+
+    private sealed class UploadReceiptForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(2)]
+        public string Title { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Range(0.01, 999999)]
+        public decimal? Amount { get; set; }
+
+        public int ExpenseId { get; set; }
+    }
+}

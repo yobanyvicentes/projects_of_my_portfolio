@@ -1,0 +1,403 @@
+@page "/shopping/{ItemId:int}/purchase"
+@inject FlatApp.Mobile.Services.Shopping.IShoppingService ShoppingService
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card shopping-purchase-page">
+    <p class="status-label">Shopping purchase</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading purchase...</h1>
+        <p>Preparing the purchase confirmation form.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage) && item is null)
+    {
+        <h1>Unable to load purchase</h1>
+        <p>@errorMessage</p>
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadAsync">Try again</button>
+            <a class="action-link-button" href="shopping">Back to shopping <span aria-hidden="true">›</span></a>
+        </div>
+    }
+    else if (item is null)
+    {
+        <h1>Item not found</h1>
+        <p>This shopping item may have already been removed or purchased.</p>
+        <div class="hero-actions">
+            <a class="primary-button" href="shopping">Back to shopping</a>
+        </div>
+    }
+    else
+    {
+        <div class="page-heading-row">
+            <div>
+                <h1>Mark as purchased</h1>
+                <p>Register this shopping item as a shared expense and choose who should split it.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        <div class="purchase-modal-card">
+            <div class="purchase-item-summary">
+                <p class="status-label">Item</p>
+                <h2>@item.Name</h2>
+                <p>@(string.IsNullOrWhiteSpace(item.Quantity) ? "No quantity added" : item.Quantity)</p>
+            </div>
+
+            <EditForm Model="purchaseForm" OnValidSubmit="PurchaseAsync" class="auth-form purchase-confirmation-form">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label for="purchase-name">Item</label>
+                    <InputText id="purchase-name" class="flat-input" @bind-Value="purchaseForm.Name" />
+                    <ValidationMessage For="() => purchaseForm.Name" />
+                </div>
+
+                <div class="purchase-form-grid">
+                    <div class="form-group">
+                        <label for="purchase-amount">Amount</label>
+                        <InputNumber id="purchase-amount" class="flat-input" @bind-Value="purchaseForm.Amount" />
+                        <ValidationMessage For="() => purchaseForm.Amount" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="purchase-date">Purchase date</label>
+                        <InputDate id="purchase-date" class="flat-input" @bind-Value="purchaseForm.PurchasedAt" />
+                    </div>
+                </div>
+
+                <div class="purchase-form-grid">
+                    <div class="form-group">
+                        <label for="purchase-paid-by">Paid by</label>
+                        <InputSelect id="purchase-paid-by" class="flat-input" @bind-Value="purchaseForm.PaidBy">
+                            <option value="0">Select payer</option>
+                            @foreach (var member in members)
+                            {
+                                <option value="@member.Id">@member.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="purchase-split-type">Split type</label>
+                        <InputSelect id="purchase-split-type" class="flat-input" @bind-Value="purchaseForm.SplitType">
+                            <option value="equal">Equal split</option>
+                            <option value="custom">Custom amounts</option>
+                        </InputSelect>
+                    </div>
+                </div>
+
+                <div class="form-group purchase-section-card">
+                    <label>Participants</label>
+                    <div class="member-picker purchase-member-picker">
+                        @foreach (var member in members)
+                        {
+                            <label class="member-option">
+                                <input type="checkbox" checked="@selectedParticipantIds.Contains(member.Id)" @onchange="args => ToggleParticipant(member.Id, args.Value as bool? == true)" />
+                                <span>
+                                    <strong>@member.Name</strong>
+                                    <small>@member.Role</small>
+                                </span>
+                            </label>
+                        }
+                    </div>
+                </div>
+
+                @if (purchaseForm.SplitType == "custom")
+                {
+                    <div class="status-card compact-status">
+                        <p class="status-label">Custom split</p>
+                        <p>Custom amounts must add up to @Money(purchaseForm.Amount). Current total: @Money(CustomSplitTotal).</p>
+                    </div>
+
+                    <div class="form-group purchase-section-card">
+                        @foreach (var split in selectedSplits)
+                        {
+                            <div class="settings-row purchase-split-row">
+                                <div>
+                                    <strong>@split.Name</strong>
+                                    <small>Custom amount</small>
+                                </div>
+                                <InputNumber class="flat-input split-input" @bind-Value="split.Amount" />
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="hero-actions purchase-actions">
+                    <button type="submit" class="primary-button" disabled="@(isSubmitting || purchaseForm.PaidBy == 0 || selectedParticipantIds.Count == 0)">
+                        @(isSubmitting ? "Saving..." : "Save purchase")
+                    </button>
+                    <a class="action-link-button" href="shopping">Cancel <span aria-hidden="true">›</span></a>
+                </div>
+            </EditForm>
+        </div>
+    }
+</section>
+
+<style>
+    .shopping-purchase-page {
+        padding-bottom: 7rem;
+    }
+
+    .purchase-modal-card {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding: 1rem;
+        border: 1px solid var(--flat-border);
+        border-radius: 1.35rem;
+        background: color-mix(in srgb, var(--flat-card) 92%, transparent);
+    }
+
+    .purchase-item-summary {
+        padding: 1rem;
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 32%, var(--flat-border));
+        border-radius: 1.15rem;
+        background: color-mix(in srgb, var(--flat-primary) 7%, transparent);
+    }
+
+    .purchase-item-summary h2 {
+        margin: .25rem 0;
+        color: var(--flat-text);
+        font-size: 1.35rem;
+    }
+
+    .purchase-item-summary p:last-child {
+        margin: 0;
+        color: var(--flat-muted);
+    }
+
+    .purchase-confirmation-form {
+        margin-top: 0;
+    }
+
+    .purchase-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .85rem;
+    }
+
+    .purchase-section-card {
+        padding: .85rem;
+        border: 1px solid var(--flat-border);
+        border-radius: 1rem;
+        background: color-mix(in srgb, var(--flat-card) 86%, transparent);
+    }
+
+    .purchase-member-picker {
+        display: grid;
+        gap: .75rem;
+    }
+
+    .purchase-split-row {
+        align-items: center;
+        gap: .85rem;
+    }
+
+    .purchase-split-row .split-input {
+        max-width: 8rem;
+    }
+
+    .purchase-actions {
+        margin-top: 1.25rem;
+    }
+
+    @@media (max-width: 430px) {
+        .purchase-form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int ItemId { get; set; }
+
+    private readonly PurchaseForm purchaseForm = new();
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private string? errorMessage;
+    private FlatApp.Mobile.Models.Shopping.ShoppingItem? item;
+    private List<FlatApp.Mobile.Models.Flats.FlatMember> members = [];
+    private List<int> selectedParticipantIds = [];
+    private List<SplitAmountForm> splitAmounts = [];
+
+    private IEnumerable<SplitAmountForm> selectedSplits => splitAmounts.Where(split => selectedParticipantIds.Contains(split.MemberId));
+
+    private decimal CustomSplitTotal => selectedSplits.Sum(split => split.Amount);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var shoppingTask = ShoppingService.GetAsync();
+            var membersTask = FlatService.GetMembersAsync();
+
+            await Task.WhenAll(shoppingTask, membersTask);
+
+            item = shoppingTask.Result?.ActiveItems?.FirstOrDefault(current => current.Id == ItemId)
+                ?? shoppingTask.Result?.Items?.FirstOrDefault(current => current.Id == ItemId);
+            members = membersTask.Result.ToList();
+
+            if (item is not null)
+            {
+                ResetFormFromItem();
+            }
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load the purchase form. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ResetFormFromItem()
+    {
+        purchaseForm.Name = item?.Name ?? string.Empty;
+        purchaseForm.Amount = 0;
+        purchaseForm.PaidBy = members.FirstOrDefault()?.Id ?? 0;
+        purchaseForm.PurchasedAt = DateTime.Today;
+        purchaseForm.SplitType = "equal";
+        selectedParticipantIds = members.Select(member => member.Id).ToList();
+        splitAmounts = members.Select(member => new SplitAmountForm(member.Id, member.Name)).ToList();
+    }
+
+    private void ToggleParticipant(int id, bool selected)
+    {
+        if (selected && !selectedParticipantIds.Contains(id))
+        {
+            selectedParticipantIds.Add(id);
+        }
+
+        if (!selected)
+        {
+            selectedParticipantIds.Remove(id);
+        }
+    }
+
+    private async Task PurchaseAsync()
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        if (purchaseForm.PaidBy == 0)
+        {
+            errorMessage = "Select who paid for this purchase.";
+            return;
+        }
+
+        if (selectedParticipantIds.Count == 0)
+        {
+            errorMessage = "Select at least one person to split with.";
+            return;
+        }
+
+        var customSplits = new Dictionary<int, decimal>();
+
+        if (purchaseForm.SplitType == "custom")
+        {
+            customSplits = selectedSplits.ToDictionary(split => split.MemberId, split => split.Amount);
+
+            if (customSplits.Values.Any(amount => amount <= 0))
+            {
+                errorMessage = "Enter a positive custom amount for each selected participant.";
+                return;
+            }
+
+            if (Math.Round(customSplits.Values.Sum(), 2) != Math.Round(purchaseForm.Amount, 2))
+            {
+                errorMessage = "Custom split amounts must equal the total purchase amount.";
+                return;
+            }
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            await ShoppingService.PurchaseAsync(item.Id, new FlatApp.Mobile.Models.Shopping.PurchaseShoppingItemRequest(
+                purchaseForm.Name.Trim(),
+                purchaseForm.Amount,
+                purchaseForm.PaidBy,
+                selectedParticipantIds,
+                purchaseForm.SplitType,
+                customSplits,
+                purchaseForm.PurchasedAt.ToString("yyyy-MM-dd")));
+
+            Navigation.NavigateTo("finance");
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to save the purchase.");
+            Console.WriteLine($"Shopping purchase failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to save the purchase. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private static string Money(decimal amount)
+    {
+        return $"${amount:0.00}";
+    }
+
+    private sealed class PurchaseForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(2)]
+        public string Name { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Range(0.01, 999999)]
+        public decimal Amount { get; set; }
+
+        public int PaidBy { get; set; }
+
+        public DateTime PurchasedAt { get; set; } = DateTime.Today;
+
+        public string SplitType { get; set; } = "equal";
+    }
+
+    private sealed class SplitAmountForm(int memberId, string name)
+    {
+        public int MemberId { get; } = memberId;
+
+        public string Name { get; } = name;
+
+        public decimal Amount { get; set; }
+    }
+}

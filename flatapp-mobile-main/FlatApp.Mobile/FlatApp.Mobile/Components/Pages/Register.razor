@@ -1,0 +1,131 @@
+@page "/register"
+@inject FlatApp.Mobile.Services.Auth.IAuthService AuthService
+@inject NavigationManager Navigation
+
+<section class="auth-card">
+    <div>
+        <p class="status-label">Create account</p>
+        <h1>Join FlatNZ</h1>
+        <p class="auth-intro">Create your account before joining or creating a flat.</p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+
+    <EditForm Model="form" OnValidSubmit="SubmitAsync" class="auth-form">
+        <DataAnnotationsValidator />
+
+        <div class="form-group">
+            <label for="register-name">Full name</label>
+            <InputText id="register-name" class="flat-input" @bind-Value="form.Name" autocomplete="name" />
+            <ValidationMessage For="() => form.Name" />
+        </div>
+
+        <div class="form-group">
+            <label for="register-email">Email</label>
+            <InputText id="register-email" class="flat-input" @bind-Value="form.Email" inputmode="email" autocomplete="email" />
+            <ValidationMessage For="() => form.Email" />
+        </div>
+
+        <div class="form-group">
+            <label for="register-password">Password</label>
+            <InputText id="register-password" type="password" class="flat-input" @bind-Value="form.Password" autocomplete="new-password" />
+            <ValidationMessage For="() => form.Password" />
+        </div>
+
+        <div class="form-group">
+            <label for="register-password-confirmation">Confirm password</label>
+            <InputText id="register-password-confirmation" type="password" class="flat-input" @bind-Value="form.PasswordConfirmation" autocomplete="new-password" />
+            <ValidationMessage For="() => form.PasswordConfirmation" />
+        </div>
+
+        <button type="submit" class="primary-button full-width" disabled="@isSubmitting">
+            @(isSubmitting ? "Creating account..." : "Create account")
+        </button>
+    </EditForm>
+
+    <p class="auth-switch">
+        Already have an account?
+        <a href="login">Sign in</a>
+    </p>
+</section>
+
+@code {
+    private readonly RegisterForm form = new();
+    private bool isSubmitting;
+    private string? errorMessage;
+    private string? successMessage;
+
+    private async Task SubmitAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        var name = form.Name.Trim();
+        var email = form.Email.Trim();
+        var password = form.Password.Trim();
+        var passwordConfirmation = form.PasswordConfirmation.Trim();
+
+        if (password != passwordConfirmation)
+        {
+            errorMessage = "Password confirmation does not match.";
+            return;
+        }
+
+        isSubmitting = true;
+
+        try
+        {
+            var response = await AuthService.RegisterAsync(name, email, password, passwordConfirmation);
+
+            if (response is null)
+            {
+                errorMessage = "The server returned an empty response.";
+                return;
+            }
+
+            successMessage = $"Account created for {response.User.Name}.";
+            Navigation.NavigateTo("dashboard", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to create the account.");
+            Console.WriteLine($"Register failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unable to reach the API. {ex.Message}";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private sealed class RegisterForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(2)]
+        public string Name { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(8)]
+        public string Password { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(8)]
+        public string PasswordConfirmation { get; set; } = string.Empty;
+    }
+}

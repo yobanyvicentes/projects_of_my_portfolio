@@ -1,0 +1,50 @@
+@using FlatApp.Mobile.Models.Finance
+@using FlatApp.Mobile.Models.Receipts
+
+@if (IsTab("Dashboard"))
+{
+    <FinanceDashboardTab Finance="Finance" />
+}
+else if (IsTab("Expenses"))
+{
+    <FinanceExpensesTab Finance="Finance" IsSubmitting="IsSubmitting" OnEdit="OnEditExpense" OnRemove="OnRemoveExpense" />
+}
+else if (IsTab("Payments"))
+{
+    <FinancePaymentsTab Finance="Finance" IsSubmitting="IsSubmitting" OnRemove="OnRemovePayment" />
+}
+else if (IsTab("Receipts"))
+{
+    <FinanceReceiptsTab Receipts="Receipts" IsSubmitting="IsSubmitting" OnDelete="OnRemoveReceipt" />
+}
+
+@code {
+    [Parameter]
+    public string ActiveTab { get; set; } = "Dashboard";
+
+    [Parameter]
+    public FinanceResponse? Finance { get; set; }
+
+    [Parameter]
+    public ReceiptsResponse? Receipts { get; set; }
+
+    [Parameter]
+    public bool IsSubmitting { get; set; }
+
+    [Parameter]
+    public EventCallback<FinanceExpense> OnEditExpense { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnRemoveExpense { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnRemovePayment { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnRemoveReceipt { get; set; }
+
+    private bool IsTab(string name)
+    {
+        return string.Equals(ActiveTab, name, StringComparison.OrdinalIgnoreCase);
+    }
+}

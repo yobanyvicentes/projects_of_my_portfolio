@@ -1,0 +1,118 @@
+.page-heading-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.compact-button {
+    min-height: 2.7rem;
+    padding: 0 1rem;
+    flex: 0 0 auto;
+}
+
+.chores-list {
+    display: grid;
+    gap: 0.9rem;
+    margin-top: 1.25rem;
+}
+
+.chore-card {
+    display: grid;
+    gap: 0.95rem;
+    border: 1px solid var(--flat-border);
+    border-radius: 1.35rem;
+    background: rgba(11, 17, 28, 0.72);
+    padding: 1rem;
+}
+
+.chore-card h2 {
+    margin: 0.25rem 0 0;
+    font-size: 1.15rem;
+    letter-spacing: -0.035em;
+}
+
+.chore-card p {
+    margin: 0.45rem 0 0;
+    color: var(--flat-muted);
+    line-height: 1.55;
+}
+
+.chore-kicker {
+    margin: 0 !important;
+    color: var(--flat-primary) !important;
+    font-size: 0.74rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.chore-meta {
+    display: grid;
+    gap: 0.45rem;
+    color: var(--flat-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.chore-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+}
+
+.chore-actions .primary-button,
+.chore-actions .secondary-button {
+    min-height: 2.8rem;
+}
+
+.form-grid-two {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+.flat-textarea {
+    min-height: 6.5rem;
+    padding-top: 0.9rem;
+    resize: vertical;
+}
+
+.member-picker {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.member-option {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    border: 1px solid var(--flat-border);
+    border-radius: 1.2rem;
+    background: rgba(11, 17, 28, 0.72);
+    padding: 0.9rem 1rem;
+}
+
+.member-option input {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: var(--flat-primary);
+}
+
+.member-option strong,
+.member-option small {
+    display: block;
+}
+
+.member-option small {
+    margin-top: 0.15rem;
+    color: var(--flat-muted);
+    font-size: 0.75rem;
+    text-transform: capitalize;
+}
+
+@media (min-width: 720px) {
+    .form-grid-two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

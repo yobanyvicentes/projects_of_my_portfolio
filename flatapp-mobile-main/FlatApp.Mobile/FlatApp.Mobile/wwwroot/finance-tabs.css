@@ -1,0 +1,67 @@
+/* Finance tabs should match the web app submodule pattern: text tabs + cyan underline. */
+.placeholder-card .finance-tabs {
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: flex-end !important;
+    gap: 1.55rem !important;
+    width: 100% !important;
+    margin: 1.25rem 0 1.35rem !important;
+    padding: 0 !important;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+}
+
+.placeholder-card .finance-tabs::-webkit-scrollbar {
+    display: none !important;
+}
+
+.placeholder-card .finance-tab {
+    position: relative !important;
+    flex: 0 0 auto !important;
+    min-width: max-content !important;
+    min-height: 3.25rem !important;
+    padding: 0 0 0.8rem !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--flat-muted) !important;
+    font-size: 0.95rem !important;
+    font-weight: 900 !important;
+    text-align: left !important;
+}
+
+.placeholder-card .finance-tab.active {
+    color: var(--flat-text) !important;
+}
+
+.placeholder-card .finance-tab::after {
+    content: "" !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: -1px !important;
+    height: 0.18rem !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+}
+
+.placeholder-card .finance-tab.active::after {
+    background: var(--flat-primary) !important;
+}
+
+.placeholder-card .finance-tab:focus-visible {
+    outline: 2px solid var(--flat-primary) !important;
+    outline-offset: 0.25rem !important;
+}
+
+@media (max-width: 390px) {
+    .placeholder-card .finance-tabs {
+        gap: 1.15rem !important;
+    }
+
+    .placeholder-card .finance-tab {
+        font-size: 0.9rem !important;
+    }
+}

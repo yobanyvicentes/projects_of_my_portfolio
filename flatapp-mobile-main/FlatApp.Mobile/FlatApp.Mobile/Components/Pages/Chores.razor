@@ -1,0 +1,371 @@
+@page "/chores"
+@inject FlatApp.Mobile.Services.Chores.IChoreService ChoreService
+
+<section class="placeholder-card chores-page">
+    <p class="status-label">Chores</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading chores...</h1>
+        <p>Checking shared responsibilities for your current flat.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <h1>Unable to load chores</h1>
+        <p>@errorMessage</p>
+        <div class="hero-actions">
+            <a class="primary-button" href="login">Log in</a>
+            <a class="action-link-button" href="dashboard">Dashboard <span aria-hidden="true">›</span></a>
+        </div>
+    }
+    else
+    {
+        <div class="page-heading-row">
+            <div>
+                <h1>Chores</h1>
+                <p>Keep your flat running smoothly.</p>
+            </div>
+            <div class="heading-actions">
+                <span class="tasks-pill">@TaskCountText</span>
+                <a class="primary-button icon-only-button" href="chores/create" aria-label="Create chore">+</a>
+            </div>
+        </div>
+
+        <div class="mini-stats-grid">
+            <div class="mini-stat-card"><small>Total</small><strong>@TotalCount</strong></div>
+            <div class="mini-stat-card"><small>Pending</small><strong class="warning-text">@PendingCount</strong></div>
+            <div class="mini-stat-card"><small>Completed</small><strong class="success-text">@DoneCount</strong></div>
+        </div>
+
+        <div class="page-tabs" role="tablist" aria-label="Chore sections">
+            <button type="button" class="page-tab @(activeTab == ChoreTab.AllTasks ? "active" : string.Empty)" @onclick="() => SetTab(ChoreTab.AllTasks)">All Tasks</button>
+            <button type="button" class="page-tab @(activeTab == ChoreTab.Statistics ? "active" : string.Empty)" @onclick="() => SetTab(ChoreTab.Statistics)">Statistics</button>
+            <button type="button" class="page-tab @(activeTab == ChoreTab.History ? "active" : string.Empty)" @onclick="() => SetTab(ChoreTab.History)">History</button>
+        </div>
+
+        @if (activeTab == ChoreTab.AllTasks)
+        {
+            @if (chores.Count == 0)
+            {
+                <div class="status-card compact-status">
+                    <p class="status-label">No chores yet</p>
+                    <p>Create your first chore directly from the mobile app.</p>
+                    <div class="hero-actions"><a class="primary-button" href="chores/create">Create chore</a></div>
+                </div>
+            }
+            else
+            {
+                <div class="chores-list">
+                    @foreach (var chore in chores)
+                    {
+                        <article class="chore-card chore-card-grid @(IsOverdue(chore) ? "overdue-chore" : string.Empty)">
+                            <div class="complete-panel">
+                                <button type="button" class="chore-check-button" @onclick="() => CompleteAsync(chore.Id)" disabled="@(isSubmitting || CompletedByFor(chore) == 0)" aria-label="Complete @chore.Title">
+                                    @if (IsDone(chore))
+                                    {
+                                        <span aria-hidden="true">✓</span>
+                                    }
+                                </button>
+                                <label for="completed-by-@chore.Id">Done by</label>
+                                <select id="completed-by-@chore.Id" class="flat-input complete-select" value="@CompletedByFor(chore)" @onchange="args => SetCompletedBy(chore, args.Value?.ToString())">
+                                    @foreach (var member in chore.Members)
+                                    {
+                                        <option value="@member.Id">@member.Name</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="chore-card-main">
+                                <div class="chore-title-row">
+                                    <h2>@chore.Title</h2>
+                                    <a class="chore-edit-button" href="@($"chores/{chore.Id}/edit")" aria-label="Edit @chore.Title">✎</a>
+                                </div>
+                                <div class="chore-chip-row">
+                                    <span class="chore-chip @(IsDone(chore) ? "done-chip" : "pending-chip")">@StatusLabel(chore)</span>
+                                    @if (IsOverdue(chore))
+                                    {
+                                        <span class="chore-chip overdue-chip">Overdue</span>
+                                    }
+                                    else if (IsDueToday(chore))
+                                    {
+                                        <span class="chore-chip today-chip">Today</span>
+                                    }
+                                    <span class="chore-chip">Next: @(chore.AssigneeName ?? "Unassigned")</span>
+                                    <span class="chore-chip accent-chip">@chore.Points pts</span>
+                                    <span class="chore-chip">Due @(chore.NextDueDate ?? "No date")</span>
+                                </div>
+                                <p>@(string.IsNullOrWhiteSpace(chore.Description) ? "Select who completed it, then tap the checkbox." : chore.Description)</p>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        }
+        else if (activeTab == ChoreTab.Statistics)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">Statistics</p>
+                <h2>Leaderboard</h2>
+                <p>Points are awarded to the flatmate selected when a chore is marked as completed.</p>
+
+                <div class="mini-stats-grid leaderboard-summary-grid">
+                    <div class="mini-stat-card"><small>Total Points</small><strong>@TotalAwardedPoints</strong></div>
+                    <div class="mini-stat-card"><small>Completed</small><strong class="success-text">@TotalCompletedFromLeaderboard</strong></div>
+                    <div class="mini-stat-card"><small>Members</small><strong>@leaderboard.Count</strong></div>
+                </div>
+
+                @if (leaderboard.Count == 0)
+                {
+                    <div class="status-card compact-status nested-empty-card">
+                        <p class="status-label">No points yet</p>
+                        <p>Complete chores to start building the flat leaderboard.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="settings-stack leaderboard-list">
+                        @foreach (var row in leaderboard.Select((value, index) => new { value, index }))
+                        {
+                            <div class="settings-row leaderboard-row">
+                                <div class="leaderboard-rank">@(row.index + 1)</div>
+                                <div><strong>@row.value.Name</strong><small>@row.value.CompletedCount completed chores</small></div>
+                                <span class="settings-pill">@row.value.TotalPoints pts</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">History</p>
+                <h2>Recent chore updates</h2>
+                <p>This mobile view shows the latest chore status based on your current chore list. Full audit history can be reviewed from Activity.</p>
+                <div class="chore-history-list">
+                    @foreach (var chore in chores.Take(8))
+                    {
+                        <article class="chore-history-card">
+                            <span class="history-status-dot @(IsDone(chore) ? "done" : "pending")"></span>
+                            <div><strong>@chore.Title</strong><small>@StatusLabel(chore) · Next: @(chore.AssigneeName ?? "Unassigned") · @chore.Points pts</small><small>Due @(chore.NextDueDate ?? "No date")</small></div>
+                        </article>
+                    }
+                </div>
+                <div class="hero-actions"><a class="action-link-button" href="activity">Open activity log <span aria-hidden="true">›</span></a></div>
+            </div>
+        }
+    }
+</section>
+
+<ConfirmDialog IsOpen="showArchiveConfirm"
+               IsBusy="isSubmitting"
+               IsDanger="true"
+               Eyebrow="Archive chore"
+               Title="Archive this chore?"
+               Message="@archiveMessage"
+               ConfirmText="Archive"
+               BusyText="Archiving..."
+               OnConfirm="ArchiveConfirmedAsync"
+               OnCancel="HideArchiveConfirm" />
+
+<style>
+    .chores-page { padding-bottom: 7rem; }
+    .page-heading-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-top: .35rem; }
+    .heading-actions { display: inline-flex; align-items: center; gap: .75rem; flex: 0 0 auto; }
+    .tasks-pill { display: inline-flex; align-items: center; min-height: 2.85rem; border-radius: 1.2rem; background: var(--flat-primary-soft); color: var(--flat-primary); padding: 0 1rem; font-weight: 900; white-space: nowrap; }
+    .icon-only-button { width: 3.15rem; min-width: 3.15rem; padding: 0; font-size: 1.65rem; line-height: 1; }
+    .mini-stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-top: 1.2rem; }
+    .mini-stat-card { min-height: 6.2rem; border: 1px solid var(--flat-border); border-radius: 1.35rem; background: rgba(11, 17, 28, .72); padding: .9rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .mini-stat-card small { color: var(--flat-muted); font-weight: 800; }
+    .mini-stat-card strong { display: block; margin-top: .35rem; font-size: 1.65rem; font-weight: 950; }
+    .warning-text { color: #FACC15; }
+    .success-text { color: var(--flat-success); }
+    .page-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .25rem; margin-top: 1.1rem; border-bottom: 1px solid var(--flat-border); }
+    .page-tab { position: relative; min-height: 3.25rem; border: 0; background: transparent; color: var(--flat-muted); font-weight: 900; text-align: left; padding: 0 .15rem; }
+    .page-tab.active { color: var(--flat-text); }
+    .page-tab.active::after { content: ""; position: absolute; left: 0; right: .75rem; bottom: -1px; height: .18rem; border-radius: 999px; background: var(--flat-primary); }
+    .chore-card-grid { display: grid; grid-template-columns: minmax(6.8rem, auto) 1fr; gap: 1rem; align-items: flex-start; }
+    .complete-panel { display: grid; gap: .45rem; width: 7rem; }
+    .complete-panel label { color: var(--flat-muted); font-size: .68rem; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+    .complete-select { min-height: 2.5rem; padding: 0 .55rem; font-size: .78rem; }
+    .overdue-chore { border-color: rgba(248, 113, 113, .45); }
+    .chore-check-button { width: 3.35rem; height: 3.35rem; border-radius: 1.05rem; border: 2px solid var(--flat-border); background: rgba(11, 17, 28, .72); color: var(--flat-primary); font-size: 1.3rem; font-weight: 950; }
+    .chore-card-main { min-width: 0; }
+    .chore-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+    .chore-title-row h2 { margin: 0; font-size: 1.25rem; line-height: 1.15; letter-spacing: -.03em; }
+    .chore-edit-button { width: 3rem; height: 3rem; border-radius: 1rem; background: rgba(148, 163, 184, .1); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+    .chore-chip-row { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .8rem; }
+    .chore-chip { display: inline-flex; align-items: center; border-radius: 999px; background: rgba(148, 163, 184, .12); color: var(--flat-muted); padding: .35rem .65rem; font-size: .78rem; font-weight: 900; }
+    .pending-chip { background: rgba(250, 204, 21, .16); color: #FACC15; }
+    .done-chip { background: rgba(34, 197, 94, .16); color: var(--flat-success); }
+    .overdue-chip { background: rgba(248, 113, 113, .16); color: #f87171; }
+    .today-chip, .accent-chip { background: var(--flat-primary-soft); color: var(--flat-primary); }
+    .leaderboard-summary-grid { margin-bottom: 1rem; }
+    .leaderboard-list { margin-top: 1rem; }
+    .leaderboard-row { align-items: center; gap: .85rem; }
+    .leaderboard-rank { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: .9rem; color: var(--flat-primary); background: var(--flat-primary-soft); font-weight: 950; }
+    .nested-empty-card { margin-top: 1rem; }
+    .chore-history-list { display: grid; gap: .65rem; margin-top: 1rem; }
+    .chore-history-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .75rem; padding: .85rem; border: 1px solid var(--flat-border); border-radius: 1rem; background: rgba(11, 17, 28, .56); }
+    .history-status-dot { width: .75rem; height: .75rem; margin-top: .35rem; border-radius: 999px; background: #FACC15; }
+    .history-status-dot.done { background: var(--flat-success); }
+    .chore-history-card strong, .chore-history-card small { display: block; }
+    .chore-history-card small { margin-top: .25rem; color: var(--flat-muted); }
+    .action-link-button { display: inline-flex; align-items: center; justify-content: space-between; min-height: 3.15rem; border-radius: 1.1rem; border: 1px solid var(--flat-border); background: rgba(11, 17, 28, .72); color: var(--flat-text); padding: 0 1rem; font-weight: 900; }
+    .action-link-button span { color: var(--flat-primary); font-size: 1.35rem; line-height: 1; }
+    @@media (max-width: 430px) { .chore-card-grid { grid-template-columns: 1fr; } .complete-panel { width: 100%; grid-template-columns: auto minmax(0, 1fr); align-items: center; } .complete-panel label { grid-column: 1 / -1; } }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private bool showArchiveConfirm;
+    private int? choreToArchiveId;
+    private string archiveMessage = "You can manage archived chores from the web app.";
+    private string? errorMessage;
+    private ChoreTab activeTab = ChoreTab.AllTasks;
+    private List<FlatApp.Mobile.Models.Chores.ChoreItem> chores = [];
+    private List<FlatApp.Mobile.Models.Chores.ChoreLeaderboardItem> leaderboard = [];
+    private readonly Dictionary<int, int> selectedCompleters = [];
+
+    private int TotalCount => chores.Count;
+    private int DoneCount => chores.Count(IsDone);
+    private int PendingCount => chores.Count(chore => string.Equals(chore.Status, "pending", StringComparison.OrdinalIgnoreCase));
+    private int OverdueCount => chores.Count(IsOverdue);
+    private int TodayCount => chores.Count(IsDueToday);
+    private int TotalAwardedPoints => leaderboard.Sum(row => row.TotalPoints);
+    private int TotalCompletedFromLeaderboard => leaderboard.Sum(row => row.CompletedCount);
+    private string TaskCountText => TotalCount == 1 ? "1 task" : $"{TotalCount} tasks";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            var response = await ChoreService.GetAsync();
+            chores = response?.Chores?.ToList() ?? [];
+            leaderboard = response?.Leaderboard?.ToList() ?? [];
+            SyncSelectedCompleters();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            errorMessage = "Please log in to load your chores.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load chores. Confirm the Laravel API is deployed and reachable.";
+            Console.WriteLine(ex.Message);
+        }
+        finally { isLoading = false; }
+    }
+
+    private void SetTab(ChoreTab tab) => activeTab = tab;
+
+    private async Task CompleteAsync(int id)
+    {
+        var completedBy = selectedCompleters.TryGetValue(id, out var value) ? value : 0;
+        if (completedBy == 0)
+        {
+            errorMessage = "Select who completed this chore first.";
+            return;
+        }
+
+        await RunActionAsync(async () =>
+        {
+            await ChoreService.CompleteAsync(id, completedBy);
+            await LoadAsync();
+        });
+    }
+
+    private void SetCompletedBy(FlatApp.Mobile.Models.Chores.ChoreItem chore, string? value)
+    {
+        if (int.TryParse(value, out var memberId)) selectedCompleters[chore.Id] = memberId;
+    }
+
+    private int CompletedByFor(FlatApp.Mobile.Models.Chores.ChoreItem chore)
+    {
+        if (selectedCompleters.TryGetValue(chore.Id, out var selected)) return selected;
+        return chore.AssignedTo ?? chore.Members.FirstOrDefault()?.Id ?? 0;
+    }
+
+    private void SyncSelectedCompleters()
+    {
+        foreach (var chore in chores)
+        {
+            selectedCompleters[chore.Id] = chore.AssignedTo ?? chore.Members.FirstOrDefault()?.Id ?? 0;
+        }
+    }
+
+    private void ShowArchiveConfirm(int id, string title)
+    {
+        choreToArchiveId = id;
+        archiveMessage = $"Archive {title}? You can manage archived chores from the web app.";
+        showArchiveConfirm = true;
+    }
+
+    private void HideArchiveConfirm()
+    {
+        showArchiveConfirm = false;
+        choreToArchiveId = null;
+    }
+
+    private async Task ArchiveConfirmedAsync()
+    {
+        if (choreToArchiveId is null) return;
+        var id = choreToArchiveId.Value;
+        await RunActionAsync(async () =>
+        {
+            await ChoreService.ArchiveAsync(id);
+            HideArchiveConfirm();
+            await LoadAsync();
+        });
+    }
+
+    private async Task RunActionAsync(Func<Task> action)
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        try { await action(); }
+        catch (Exception ex)
+        {
+            errorMessage = "The chore action could not be completed.";
+            Console.WriteLine(ex.Message);
+        }
+        finally { isSubmitting = false; }
+    }
+
+    private static string StatusLabel(FlatApp.Mobile.Models.Chores.ChoreItem chore)
+    {
+        return string.IsNullOrWhiteSpace(chore.Status)
+            ? "Upcoming"
+            : string.Join(' ', chore.Status.Replace('_', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(word => char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()));
+    }
+
+    private static bool IsDone(FlatApp.Mobile.Models.Chores.ChoreItem chore)
+    {
+        return string.Equals(chore.Status, "completed", StringComparison.OrdinalIgnoreCase) || string.Equals(chore.Status, "done", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsOverdue(FlatApp.Mobile.Models.Chores.ChoreItem chore) => string.Equals(chore.Status, "overdue", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDueToday(FlatApp.Mobile.Models.Chores.ChoreItem chore)
+    {
+        return !IsDone(chore) && TryDueDate(chore.NextDueDate, out var dueDate) && dueDate == DateTime.Today;
+    }
+
+    private static bool TryDueDate(string? value, out DateTime date)
+    {
+        if (DateTime.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeLocal, out var parsed))
+        {
+            date = parsed.Date;
+            return true;
+        }
+        date = default;
+        return false;
+    }
+
+    private enum ChoreTab { AllTasks, Statistics, History }
+}

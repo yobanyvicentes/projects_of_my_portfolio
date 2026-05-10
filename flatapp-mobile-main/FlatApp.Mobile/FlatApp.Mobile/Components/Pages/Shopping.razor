@@ -1,0 +1,359 @@
+@page "/shopping"
+@inject FlatApp.Mobile.Services.Shopping.IShoppingService ShoppingService
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card shopping-page">
+    <p class="status-label">Shopping</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading shopping list...</h1>
+        <p>Checking shared shopping items for your current flat.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <h1>Unable to load shopping</h1>
+        <p>@errorMessage</p>
+
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadAsync">Try again</button>
+            <a class="action-link-button" href="dashboard">Dashboard <span aria-hidden="true">›</span></a>
+        </div>
+    }
+    else
+    {
+        <div class="page-heading-row">
+            <div>
+                <h1>Shopping list</h1>
+                <p>Keep track of shared shopping items and who bought them.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="alert alert-success">@successMessage</div>
+        }
+
+        @if (members.Count == 0)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">Purchases unavailable</p>
+                <p>Add or approve flat members before converting shopping items into shared finance expenses.</p>
+                <div class="hero-actions">
+                    <a class="primary-button" href="flat-onboarding">Manage flats</a>
+                    <a class="action-link-button" href="dashboard">Back to dashboard <span aria-hidden="true">›</span></a>
+                </div>
+            </div>
+        }
+
+        <EditForm Model="form" OnValidSubmit="AddItemAsync" class="auth-form shopping-add-form shopping-add-compact">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label for="shopping-name">Item</label>
+                <InputText id="shopping-name" class="flat-input" @bind-Value="form.Name" placeholder="Example: Milk" />
+                <ValidationMessage For="() => form.Name" />
+            </div>
+
+            <div class="form-group">
+                <label for="shopping-quantity">Qty</label>
+                <InputText id="shopping-quantity" class="flat-input" @bind-Value="form.Quantity" placeholder="Example: 2" />
+            </div>
+
+            <button type="submit" class="primary-button full-width" disabled="@isSubmitting">
+                @(isSubmitting ? "Adding..." : "Add")
+            </button>
+        </EditForm>
+
+        <div class="shopping-section-heading">
+            <p class="status-label">To buy</p>
+            <span>@activeItems.Count @(activeItems.Count == 1 ? "item" : "items")</span>
+        </div>
+
+        @if (activeItems.Count == 0)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">No active items</p>
+                <p>Add the first item your flat needs to buy.</p>
+            </div>
+        }
+        else
+        {
+            <div class="shopping-list">
+                @foreach (var item in activeItems)
+                {
+                    <article class="shopping-card shopping-card-mobile shopping-row-card">
+                        <div>
+                            <p class="chore-kicker">Added by @(item.AddedByName ?? "flatmate")</p>
+                            <h2>@item.Name</h2>
+                            @if (!string.IsNullOrWhiteSpace(item.Quantity))
+                            {
+                                <p>@item.Quantity</p>
+                            }
+                        </div>
+
+                        <div class="chore-actions shopping-actions shopping-icon-actions">
+                            <button type="button" class="shopping-icon-button shopping-remove-button" title="Remove item" @onclick="() => ShowRemoveConfirm(item.Id, item.Name)" disabled="@isSubmitting">
+                                X
+                            </button>
+                            <button type="button" class="shopping-icon-button shopping-purchase-button" title="Mark as purchased" @onclick="() => OpenPurchase(item.Id)" disabled="@(isSubmitting || members.Count == 0)">
+                                ✓
+                            </button>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+
+        @if (inactiveItems.Count > 0)
+        {
+            <div class="status-card compact-status shopping-history">
+                <p class="status-label">History</p>
+                @foreach (var item in inactiveItems)
+                {
+                    <div class="shopping-history-row">
+                        <span>@item.Name</span>
+                        <button type="button" class="settings-link" @onclick="() => ReactivateAsync(item.Id)" disabled="@isSubmitting">
+                            Reactivate
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+    }
+</section>
+
+<ConfirmDialog IsOpen="showRemoveConfirm"
+               IsBusy="isSubmitting"
+               IsDanger="true"
+               Eyebrow="Remove item"
+               Title="Remove this shopping item?"
+               Message="@removeMessage"
+               ConfirmText="Remove"
+               BusyText="Removing..."
+               OnConfirm="RemoveConfirmedAsync"
+               OnCancel="HideRemoveConfirm" />
+
+<style>
+    .shopping-page {
+        padding-bottom: 7rem;
+    }
+
+    .shopping-add-compact {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(5.5rem, .45fr);
+        gap: .75rem;
+    }
+
+    .shopping-add-compact .full-width {
+        grid-column: 1 / -1;
+    }
+
+    .shopping-section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin: 1.25rem 0 .75rem;
+    }
+
+    .shopping-section-heading span {
+        color: var(--flat-muted);
+        font-size: .82rem;
+        font-weight: 800;
+    }
+
+    .shopping-card-mobile {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .shopping-row-card {
+        padding: .9rem .95rem;
+    }
+
+    .shopping-actions {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: .5rem;
+    }
+
+    .shopping-icon-button {
+        width: 2.4rem;
+        height: 2.4rem;
+        border-radius: 999px;
+        border: 1px solid var(--flat-border);
+        background: transparent;
+        color: var(--flat-text);
+        font-size: 1.15rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+
+    .shopping-purchase-button {
+        border-color: color-mix(in srgb, var(--flat-primary) 65%, transparent);
+        color: var(--flat-primary);
+    }
+
+    .shopping-remove-button {
+        border-color: rgba(248, 113, 113, .45);
+        color: #f87171;
+    }
+
+    .shopping-icon-button:disabled {
+        opacity: .45;
+    }
+</style>
+
+@code {
+    private readonly AddShoppingItemForm form = new();
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private bool showRemoveConfirm;
+    private string? errorMessage;
+    private string? successMessage;
+    private int? itemToRemoveId;
+    private string removeMessage = "This item will move out of the active shopping list.";
+    private List<FlatApp.Mobile.Models.Shopping.ShoppingItem> activeItems = [];
+    private List<FlatApp.Mobile.Models.Shopping.ShoppingItem> inactiveItems = [];
+    private List<FlatApp.Mobile.Models.Flats.FlatMember> members = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var shoppingTask = ShoppingService.GetAsync();
+            var membersTask = FlatService.GetMembersAsync();
+
+            await Task.WhenAll(shoppingTask, membersTask);
+
+            activeItems = shoppingTask.Result?.ActiveItems?.ToList() ?? [];
+            inactiveItems = shoppingTask.Result?.InactiveItems?.ToList() ?? [];
+            members = membersTask.Result.ToList();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load shopping. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddItemAsync()
+    {
+        await RunActionAsync(async () =>
+        {
+            await ShoppingService.CreateAsync(new FlatApp.Mobile.Models.Shopping.CreateShoppingItemRequest(
+                form.Name.Trim(),
+                string.IsNullOrWhiteSpace(form.Quantity) ? null : form.Quantity.Trim()));
+
+            form.Name = string.Empty;
+            form.Quantity = null;
+            successMessage = "Shopping item added.";
+            await LoadAsync();
+        }, "Unable to add the shopping item.");
+    }
+
+    private void OpenPurchase(int id)
+    {
+        Navigation.NavigateTo($"shopping/{id}/purchase");
+    }
+
+    private void ShowRemoveConfirm(int id, string name)
+    {
+        itemToRemoveId = id;
+        removeMessage = $"Remove {name} from the active shopping list? You can reactivate it later from History.";
+        showRemoveConfirm = true;
+    }
+
+    private void HideRemoveConfirm()
+    {
+        showRemoveConfirm = false;
+        itemToRemoveId = null;
+    }
+
+    private async Task RemoveConfirmedAsync()
+    {
+        if (itemToRemoveId is null)
+        {
+            return;
+        }
+
+        var id = itemToRemoveId.Value;
+
+        await RunActionAsync(async () =>
+        {
+            await ShoppingService.DeactivateAsync(id);
+            successMessage = "Shopping item removed from active list.";
+            HideRemoveConfirm();
+            await LoadAsync();
+        }, "Unable to remove the shopping item.");
+    }
+
+    private async Task ReactivateAsync(int id)
+    {
+        await RunActionAsync(async () =>
+        {
+            await ShoppingService.ReactivateAsync(id);
+            successMessage = "Shopping item reactivated.";
+            await LoadAsync();
+        }, "Unable to reactivate the shopping item.");
+    }
+
+    private async Task RunActionAsync(Func<Task> action, string fallbackError)
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await action();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage(fallbackError);
+            Console.WriteLine($"Shopping action failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = fallbackError;
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private sealed class AddShoppingItemForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(2)]
+        public string Name { get; set; } = string.Empty;
+
+        public string? Quantity { get; set; }
+    }
+}

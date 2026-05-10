@@ -1,0 +1,287 @@
+@page "/dashboard"
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+@inject FlatApp.Mobile.Services.Activity.IActivityService ActivityService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card">
+    <p class="status-label">Dashboard</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading your flat...</h1>
+        <p>Checking your current FlatNZ home.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <h1>We could not load your dashboard</h1>
+        <p>@errorMessage</p>
+
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadDashboardAsync">Try again</button>
+            <a class="action-link-button" href="settings">Settings <span aria-hidden="true">›</span></a>
+        </div>
+    }
+    else if (currentFlat is null)
+    {
+        <h1>Create or join a flat</h1>
+        <p>Your account is ready. Set up your first flat or request access with an invite code to start using FlatNZ.</p>
+
+        <div class="hero-actions">
+            <a class="primary-button" href="flat-onboarding">Create or join a flat</a>
+            <a class="action-link-button" href="settings">Account settings <span aria-hidden="true">›</span></a>
+        </div>
+    }
+    else
+    {
+        <h1>@currentFlat.Name</h1>
+        <p>@(string.IsNullOrWhiteSpace(currentFlat.Address) ? "Your current FlatNZ home is ready." : currentFlat.Address)</p>
+
+        <div class="dashboard-grid" aria-label="Flat summary">
+            <a class="summary-tile" href="chores">
+                <span>✓</span>
+                <strong>Chores</strong>
+                <small>Manage responsibilities</small>
+            </a>
+
+            <a class="summary-tile" href="shopping">
+                <span>🛒</span>
+                <strong>Shopping</strong>
+                <small>Shared shopping list</small>
+            </a>
+
+            <a class="summary-tile" href="finance">
+                <span>▣</span>
+                <strong>Finance</strong>
+                <small>Expenses and payments</small>
+            </a>
+
+            <a class="summary-tile" href="settings">
+                <span>☼</span>
+                <strong>Settings</strong>
+                <small>@flatCountText</small>
+            </a>
+        </div>
+
+        <div class="dashboard-grid finance-summary-grid" aria-label="Operational summary">
+            <a class="summary-tile" href="members">
+                <span>👥</span>
+                <strong>@memberCountText</strong>
+                <small>Active members</small>
+            </a>
+
+            <a class="summary-tile" href="join-requests">
+                <span>⌁</span>
+                <strong>@pendingRequestCountText</strong>
+                <small>@pendingRequestHint</small>
+            </a>
+
+            <a class="summary-tile" href="activity">
+                <span>↻</span>
+                <strong>@activityCountText</strong>
+                <small>Recent updates</small>
+            </a>
+
+            <a class="summary-tile" href="flat-onboarding">
+                <span>⌂</span>
+                <strong>@flatCountText</strong>
+                <small>Manage flats</small>
+            </a>
+        </div>
+
+        <div class="status-card compact-status">
+            <p class="status-label">Flat management hub</p>
+            <h2>Manage people and access</h2>
+            <p>Review active flatmates, approve or reject pending requests, and keep track of recent flat updates from one place.</p>
+            <div class="hero-actions">
+                <a class="action-link-button" href="members">View members <span aria-hidden="true">›</span></a>
+                <a class="action-link-button" href="join-requests">Review requests <span aria-hidden="true">›</span></a>
+                <a class="action-link-button" href="activity">View activity <span aria-hidden="true">›</span></a>
+            </div>
+        </div>
+
+        <div class="status-card compact-status">
+            <p class="status-label">Recent activity</p>
+            @if (activityPreview.Count == 0)
+            {
+                <p>No recent activity yet. New approvals and shared actions will appear here.</p>
+            }
+            else
+            {
+                <div class="settings-stack">
+                    @foreach (var activity in activityPreview)
+                    {
+                        <div class="settings-row activity-row">
+                            <div>
+                                <strong>@ActivityTitle(activity)</strong>
+                                <small>@(activity.Description ?? FormatAction(activity.Action))</small>
+                                <small>@FormatDate(activity.CreatedAt)</small>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            <div class="hero-actions">
+                <a class="action-link-button" href="activity">Open activity log <span aria-hidden="true">›</span></a>
+            </div>
+        </div>
+
+        <div class="status-card compact-status">
+            <p class="status-label">Quick finance actions</p>
+            <p>Record payments, manage receipts, or review flat balances from Finance.</p>
+            <div class="hero-actions">
+                <a class="action-link-button" href="finance">Open finance <span aria-hidden="true">›</span></a>
+                <a class="action-link-button" href="receipts/upload">Upload receipt <span aria-hidden="true">›</span></a>
+            </div>
+        </div>
+
+        <div class="hero-actions">
+            <a class="action-link-button" href="chores">Open chores <span aria-hidden="true">›</span></a>
+            <a class="action-link-button" href="flat-onboarding">Manage flats <span aria-hidden="true">›</span></a>
+        </div>
+    }
+</section>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private FlatApp.Mobile.Models.Flats.FlatSummary? currentFlat;
+    private string flatCountText = "No flats yet";
+    private string memberCountText = "—";
+    private string pendingRequestCountText = "—";
+    private string pendingRequestHint = "Admin review";
+    private string activityCountText = "—";
+    private List<FlatApp.Mobile.Models.Activity.ActivityItem> activityPreview = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        activityPreview = [];
+        memberCountText = "—";
+        pendingRequestCountText = "—";
+        pendingRequestHint = "Admin review";
+        activityCountText = "—";
+
+        try
+        {
+            var response = await FlatService.GetCurrentAsync();
+            currentFlat = response?.CurrentFlat;
+
+            var count = response?.Flats?.Count ?? 0;
+            flatCountText = count == 1 ? "1 flat" : $"{count} flats";
+
+            if (currentFlat is not null)
+            {
+                await LoadOperationalSummaryAsync();
+            }
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadOperationalSummaryAsync()
+    {
+        var membersTask = LoadMemberCountAsync();
+        var joinRequestsTask = LoadPendingRequestCountAsync();
+        var activityTask = LoadActivityPreviewAsync();
+
+        await Task.WhenAll(membersTask, joinRequestsTask, activityTask);
+    }
+
+    private async Task LoadMemberCountAsync()
+    {
+        try
+        {
+            var members = await FlatService.GetMembersAsync();
+            memberCountText = members.Count == 1 ? "1 member" : $"{members.Count} members";
+        }
+        catch (Exception ex)
+        {
+            memberCountText = "Unavailable";
+            Console.WriteLine($"Dashboard members summary failed: {ex.Message}");
+        }
+    }
+
+    private async Task LoadPendingRequestCountAsync()
+    {
+        try
+        {
+            var requests = await FlatService.GetJoinRequestsAsync();
+            pendingRequestCountText = requests.Count == 1 ? "1 request" : $"{requests.Count} requests";
+            pendingRequestHint = requests.Count == 0 ? "No pending requests" : "Pending approval";
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 403)
+        {
+            pendingRequestCountText = "Admin only";
+            pendingRequestHint = "Requests restricted";
+        }
+        catch (Exception ex)
+        {
+            pendingRequestCountText = "Unavailable";
+            pendingRequestHint = "Try again later";
+            Console.WriteLine($"Dashboard join request summary failed: {ex.Message}");
+        }
+    }
+
+    private async Task LoadActivityPreviewAsync()
+    {
+        try
+        {
+            var activities = await ActivityService.GetAsync();
+            activityPreview = activities.Take(3).ToList();
+            activityCountText = activities.Count == 1 ? "1 update" : $"{activities.Count} updates";
+        }
+        catch (Exception ex)
+        {
+            activityPreview = [];
+            activityCountText = "Unavailable";
+            Console.WriteLine($"Dashboard activity summary failed: {ex.Message}");
+        }
+    }
+
+    private static string ActivityTitle(FlatApp.Mobile.Models.Activity.ActivityItem activity)
+    {
+        return activity.Action switch
+        {
+            "flat.created" => "Flat created",
+            "join.requested" => "Join request sent",
+            "join.approved" => "Join request approved",
+            "join.rejected" => "Join request rejected",
+            "member.role.updated" => "Member role updated",
+            "member.removed" => "Member removed",
+            _ => FormatAction(activity.Action)
+        };
+    }
+
+    private static string FormatAction(string action)
+    {
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            return "Activity update";
+        }
+
+        return string.Join(' ', action.Replace('.', ' ').Replace('_', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()));
+    }
+
+    private static string FormatDate(DateTimeOffset? date)
+    {
+        return date?.ToLocalTime().ToString("dd MMM yyyy, h:mm tt") ?? "Recently";
+    }
+}

@@ -1,0 +1,218 @@
+@page "/activity"
+@inject FlatApp.Mobile.Services.Activity.IActivityService ActivityService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card activity-page">
+    <p class="status-label">Activity</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading activity...</h1>
+        <p>Checking recent updates for your current flat.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <h1>Unable to load activity</h1>
+        <p>@errorMessage</p>
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadAsync">Try again</button>
+            <a class="secondary-button" href="dashboard">Back to dashboard</a>
+        </div>
+    }
+    else
+    {
+        <h1>Flat activity log</h1>
+        <p>See the latest updates, approvals, and shared actions from your current flat.</p>
+
+        @if (activities.Count == 0)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">No activity yet</p>
+                <p>Activity will appear here after flatmates create, update, approve, or complete shared actions.</p>
+                <div class="hero-actions">
+                    <a class="primary-button" href="dashboard">Back to dashboard</a>
+                    <a class="secondary-button" href="join-requests">Review requests</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="activity-card-list">
+                @foreach (var activity in activities)
+                {
+                    <article class="activity-card">
+                        <div class="activity-icon" aria-hidden="true">@ActivityIcon(activity.Action)</div>
+                        <div class="activity-content">
+                            <div class="activity-card-header">
+                                <strong>@ActivityTitle(activity)</strong>
+                                <span>@FormatAction(activity.Action)</span>
+                            </div>
+                            <p>@(activity.Description ?? FormatAction(activity.Action))</p>
+                            <small>@ActorText(activity) · @FormatDate(activity.CreatedAt)</small>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    }
+</section>
+
+<style>
+    .activity-page {
+        padding-bottom: 7rem;
+    }
+
+    .activity-card-list {
+        display: grid;
+        gap: .85rem;
+        margin-top: 1.15rem;
+    }
+
+    .activity-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: .9rem;
+        padding: 1rem;
+        border: 1px solid var(--flat-border);
+        border-radius: 1.15rem;
+        background: color-mix(in srgb, var(--flat-card) 92%, transparent);
+    }
+
+    .activity-icon {
+        display: grid;
+        place-items: center;
+        width: 2.6rem;
+        height: 2.6rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        color: var(--flat-primary);
+        font-weight: 900;
+        background: color-mix(in srgb, var(--flat-primary) 8%, transparent);
+    }
+
+    .activity-content {
+        display: grid;
+        gap: .35rem;
+        min-width: 0;
+    }
+
+    .activity-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: .75rem;
+    }
+
+    .activity-card-header strong {
+        color: var(--flat-text);
+        font-size: 1rem;
+    }
+
+    .activity-card-header span {
+        flex: 0 0 auto;
+        padding: .25rem .55rem;
+        border-radius: 999px;
+        border: 1px solid var(--flat-border);
+        color: var(--flat-muted);
+        font-size: .72rem;
+        font-weight: 900;
+    }
+
+    .activity-content p,
+    .activity-content small {
+        margin: 0;
+        color: var(--flat-muted);
+        line-height: 1.4;
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private List<FlatApp.Mobile.Models.Activity.ActivityItem> activities = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            activities = (await ActivityService.GetAsync()).ToList();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 403)
+        {
+            errorMessage = "Create or join a flat before reviewing activity.";
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to load activity. Please check your connection and try again.");
+            Console.WriteLine($"Activity failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load activity. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string ActivityTitle(FlatApp.Mobile.Models.Activity.ActivityItem activity)
+    {
+        return activity.Action switch
+        {
+            "flat.created" => "Flat created",
+            "join.requested" => "Join request sent",
+            "join.approved" => "Join request approved",
+            "join.rejected" => "Join request rejected",
+            _ => FormatAction(activity.Action)
+        };
+    }
+
+    private static string ActivityIcon(string action)
+    {
+        return action switch
+        {
+            "flat.created" => "⌂",
+            "join.requested" => "+",
+            "join.approved" => "✓",
+            "join.rejected" => "!",
+            "member.role.updated" => "★",
+            "member.removed" => "−",
+            _ => "↻"
+        };
+    }
+
+    private static string FormatAction(string action)
+    {
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            return "Activity update";
+        }
+
+        return string.Join(' ', action.Replace('.', ' ').Replace('_', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()));
+    }
+
+    private static string ActorText(FlatApp.Mobile.Models.Activity.ActivityItem activity)
+    {
+        return string.IsNullOrWhiteSpace(activity.UserName) ? "Flat activity" : activity.UserName;
+    }
+
+    private static string FormatDate(DateTimeOffset? date)
+    {
+        return date?.ToLocalTime().ToString("dd MMM yyyy, h:mm tt") ?? "Recently";
+    }
+}

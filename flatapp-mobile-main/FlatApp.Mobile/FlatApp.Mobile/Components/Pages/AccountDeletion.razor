@@ -1,0 +1,230 @@
+@page "/account-deletion"
+@using FlatApp.Mobile.Models.Auth
+@inject FlatApp.Mobile.Services.Auth.IAuthService AuthService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card compliance-page">
+    <p class="status-label">Account deletion</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading account deletion...</h1>
+        <p>Checking whether you already have a deletion request in progress.</p>
+    }
+    else
+    {
+        <h1>Delete your account and data</h1>
+        <p>Use this page to review the current status of your account deletion request and submit a new one when no request is already in progress.</p>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="alert alert-success">@successMessage</div>
+        }
+
+        <div class="status-card compact-status compliance-card">
+            <p class="status-label">Current status</p>
+            @if (currentRequest is null)
+            {
+                <p>No account deletion request has been submitted yet.</p>
+            }
+            else
+            {
+                <div class="status-stack">
+                    <p><strong>Status:</strong> @StatusLabel(currentRequest.Status)</p>
+                    <p><strong>Requested:</strong> @FormatDate(currentRequest.RequestedAt)</p>
+
+                    @if (!string.IsNullOrWhiteSpace(currentRequest.ProcessedAt))
+                    {
+                        <p><strong>Processed:</strong> @FormatDate(currentRequest.ProcessedAt)</p>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(currentRequest.Reason))
+                    {
+                        <p><strong>Reason:</strong> @currentRequest.Reason</p>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(currentRequest.Notes))
+                    {
+                        <p><strong>Notes:</strong> @currentRequest.Notes</p>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="status-card compact-status compliance-card">
+            <p class="status-label">What this process covers</p>
+            <ul>
+                <li>Your account profile and mobile authentication access.</li>
+                <li>Your request to remove or disconnect account data where the backend supports it safely.</li>
+                <li>A manual review step while the full self-service deletion workflow is still being expanded.</li>
+            </ul>
+        </div>
+
+        <div class="status-card compact-status compliance-card">
+            <p class="status-label">Important note</p>
+            <p>Some shared household records may need to be retained for flat history, receipts, audit, or shared-finance continuity even after a deletion request is submitted.</p>
+        </div>
+
+        @if (CanSubmitNewRequest)
+        {
+            <EditForm class="receipt-upload-form" OnSubmit="SubmitRequestAsync">
+                <div class="receipt-form-section">
+                    <p class="status-label">Submit a deletion request</p>
+                    <div class="form-group">
+                        <label for="deletion-reason">Reason optional</label>
+                        <InputTextArea id="deletion-reason" class="flat-input textarea-input" @bind-Value="reason" />
+                    </div>
+                </div>
+
+                <div class="hero-actions">
+                    <button type="submit" class="primary-button" disabled="@isSubmitting">
+                        @(isSubmitting ? "Submitting..." : "Submit deletion request")
+                    </button>
+                    <button type="button" class="secondary-button" @onclick="ReloadAsync" disabled="@isSubmitting">Refresh status</button>
+                </div>
+            </EditForm>
+        }
+        else
+        {
+            <div class="hero-actions">
+                <button type="button" class="secondary-button" @onclick="ReloadAsync">Refresh status</button>
+                <a class="secondary-button" href="privacy-policy">Privacy policy</a>
+            </div>
+        }
+
+        <div class="hero-actions">
+            <a class="secondary-button" href="settings">Back to settings</a>
+        </div>
+    }
+</section>
+
+<style>
+    .compliance-page {
+        display: grid;
+        gap: 1rem;
+        padding-bottom: 7rem;
+    }
+
+    .compliance-card p,
+    .compliance-card ul,
+    .compliance-card ol {
+        margin: 0;
+    }
+
+    .compliance-card ul,
+    .compliance-card ol,
+    .status-stack {
+        padding-left: 1.1rem;
+        color: var(--flat-muted);
+        display: grid;
+        gap: .45rem;
+    }
+
+    .status-stack {
+        padding-left: 0;
+    }
+
+    .textarea-input {
+        min-height: 7rem;
+        resize: vertical;
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private string? errorMessage;
+    private string? successMessage;
+    private string? reason;
+    private AccountDeletionRequestItem? currentRequest;
+
+    private bool CanSubmitNewRequest => currentRequest is null || currentRequest.Status is not ("pending" or "in_review");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var response = await AuthService.GetAccountDeletionStatusAsync();
+            currentRequest = response?.Request;
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception)
+        {
+            errorMessage = "Unable to load the account deletion status. Please try again.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SubmitRequestAsync()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var response = await AuthService.RequestAccountDeletionAsync(string.IsNullOrWhiteSpace(reason) ? null : reason.Trim());
+            currentRequest = response?.Request;
+            successMessage = response?.Message ?? "Account deletion request submitted.";
+            reason = string.Empty;
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to submit the account deletion request.");
+        }
+        catch (Exception)
+        {
+            errorMessage = "Unable to submit the account deletion request. Please try again.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private static string StatusLabel(string? status)
+    {
+        return status switch
+        {
+            "pending" => "Pending review",
+            "in_review" => "In review",
+            "approved" => "Approved",
+            "completed" => "Completed",
+            "rejected" => "Rejected",
+            _ => string.IsNullOrWhiteSpace(status) ? "Unknown" : status,
+        };
+    }
+
+    private static string FormatDate(string? isoValue)
+    {
+        if (string.IsNullOrWhiteSpace(isoValue) || !DateTimeOffset.TryParse(isoValue, out var date))
+        {
+            return "Not available";
+        }
+
+        return date.ToLocalTime().ToString("dd MMM yyyy, h:mm tt");
+    }
+}

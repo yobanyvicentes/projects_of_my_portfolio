@@ -1,0 +1,52 @@
+@using FlatApp.Mobile.Models.Finance
+
+@if (Finance is null || Finance.Expenses.Count == 0)
+{
+    <div class="status-card compact-status">
+        <p class="status-label">No expenses yet</p>
+        <p>Add purchases from Shopping or create a finance expense here.</p>
+    </div>
+}
+else
+{
+    <div class="status-card compact-status">
+        <p class="status-label">Expenses</p>
+        @foreach (var expense in Finance.Expenses)
+        {
+            <article class="shopping-card finance-expense-card">
+                <div>
+                    <p class="chore-kicker">@expense.Category · paid by @(expense.PayerName ?? "flatmate")</p>
+                    <h2>@expense.Title</h2>
+                    <p>@Money(expense.Amount)</p>
+                </div>
+                <div class="chore-actions">
+                    <button type="button" class="action-link-button" @onclick="() => OnEdit.InvokeAsync(expense)" disabled="@IsSubmitting">
+                        Edit <span aria-hidden="true">›</span>
+                    </button>
+                    <button type="button" class="action-link-button" @onclick="() => OnRemove.InvokeAsync(expense.Id)" disabled="@IsSubmitting">
+                        Remove <span aria-hidden="true">›</span>
+                    </button>
+                </div>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public FinanceResponse? Finance { get; set; }
+
+    [Parameter]
+    public bool IsSubmitting { get; set; }
+
+    [Parameter]
+    public EventCallback<FinanceExpense> OnEdit { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnRemove { get; set; }
+
+    private static string Money(decimal amount)
+    {
+        return $"${amount:0.00}";
+    }
+}

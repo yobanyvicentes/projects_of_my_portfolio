@@ -1,0 +1,34 @@
+﻿@page "/auth-status"
+@inject FlatApp.Mobile.Services.Auth.IAuthService AuthService
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+
+<section class="placeholder-card">
+    <p class="status-label">API foundation</p>
+    <h1>Connection ready</h1>
+    <p>
+        The mobile app now has the service layer needed to connect with the Laravel API once the backend endpoints are available.
+    </p>
+
+    <ul class="placeholder-list">
+        <li>Secure token storage</li>
+        <li>Bearer token HTTP handler</li>
+        <li>Auth service for login/register/logout</li>
+        <li>Current flat service foundation</li>
+    </ul>
+
+    <div class="status-card compact-status">
+        <p class="status-label">Local auth token</p>
+        <h2>@authStatus</h2>
+        <p>This only checks secure storage. It does not call the backend yet.</p>
+    </div>
+</section>
+
+@code {
+    private string authStatus = "Checking...";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+        authStatus = isAuthenticated ? "Stored token found" : "No token stored";
+    }
+}

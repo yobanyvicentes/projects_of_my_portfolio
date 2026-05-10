@@ -1,0 +1,815 @@
+@page "/finance"
+@inject FlatApp.Mobile.Services.Finance.IFinanceService FinanceService
+@inject FlatApp.Mobile.Services.Receipts.IReceiptService ReceiptService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card">
+    <p class="status-label">Finance</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading finance...</h1>
+        <p>Checking expenses, balances, receipts, and suggested payments for your current flat.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <h1>Unable to load finance</h1>
+        <p>@errorMessage</p>
+
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadAsync">Try again</button>
+            <a class="action-link-button" href="dashboard">Dashboard <span aria-hidden="true">›</span></a>
+        </div>
+    }
+    else if (finance is null)
+    {
+        <h1>No finance data</h1>
+        <p>Create or join a flat first, then add shared expenses.</p>
+    }
+    else
+    {
+        <div class="page-heading-row">
+            <div>
+                <h1>Finances</h1>
+                <p>Track shared expenses, payments, and balances.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="alert alert-success">@successMessage</div>
+        }
+
+        <div class="finance-tabs" role="tablist" aria-label="Finance sections">
+            <button type="button" class="finance-tab @(activeTab == FinanceTab.Dashboard ? "active" : string.Empty)" @onclick="() => SetTab(FinanceTab.Dashboard)">Dashboard</button>
+            <button type="button" class="finance-tab @(activeTab == FinanceTab.Expenses ? "active" : string.Empty)" @onclick="() => SetTab(FinanceTab.Expenses)">Expenses</button>
+            <button type="button" class="finance-tab @(activeTab == FinanceTab.Payments ? "active" : string.Empty)" @onclick="() => SetTab(FinanceTab.Payments)">Payments</button>
+            <button type="button" class="finance-tab @(activeTab == FinanceTab.Receipts ? "active" : string.Empty)" @onclick="() => SetTab(FinanceTab.Receipts)">Receipts</button>
+        </div>
+
+        <div class="hero-actions finance-actions">
+            <button type="button" class="primary-button" @onclick="ToggleExpenseForm" disabled="@(finance.Members.Count == 0)">
+                @(showExpenseForm ? "Hide expense form" : "Add expense")
+            </button>
+
+            <button type="button" class="action-link-button" @onclick="ToggleSettlementForm" disabled="@(finance.Members.Count == 0)">
+                @(showSettlementForm ? "Hide payment form" : "Record payment") <span aria-hidden="true">›</span>
+            </button>
+
+            <a class="action-link-button" href="receipts/upload">Upload receipt <span aria-hidden="true">›</span></a>
+        </div>
+
+        @if (finance.Members.Count == 0)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">Members required</p>
+                <p>Add or approve active flat members before creating expenses or recording payments.</p>
+                <div class="hero-actions">
+                    <a class="primary-button" href="flat-onboarding">Manage flats</a>
+                    <a class="action-link-button" href="dashboard">Back to dashboard <span aria-hidden="true">›</span></a>
+                </div>
+            </div>
+        }
+
+        @if (activeTab == FinanceTab.Expenses && showExpenseForm)
+        {
+            <EditForm Model="expenseForm" OnValidSubmit="SaveExpenseAsync" class="auth-form finance-expense-form">
+                <DataAnnotationsValidator />
+
+                <div class="form-grid-two">
+                    <div class="form-group">
+                        <label for="expense-title">Title</label>
+                        <InputText id="expense-title" class="flat-input" @bind-Value="expenseForm.Title" placeholder="Example: Internet bill" />
+                        <ValidationMessage For="() => expenseForm.Title" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="expense-amount">Amount</label>
+                        <InputNumber id="expense-amount" class="flat-input" @bind-Value="expenseForm.Amount" />
+                        <ValidationMessage For="() => expenseForm.Amount" />
+                    </div>
+                </div>
+
+                <div class="form-grid-two">
+                    <div class="form-group">
+                        <label for="expense-category">Category</label>
+                        <InputSelect id="expense-category" class="flat-input" @bind-Value="expenseForm.Category">
+                            <option value="food">Food</option>
+                            <option value="rent">Rent</option>
+                            <option value="utilities">Utilities</option>
+                            <option value="shopping">Shopping</option>
+                            <option value="other">Other</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="expense-paid-by">Paid by</label>
+                        <InputSelect id="expense-paid-by" class="flat-input" @bind-Value="expenseForm.PaidBy">
+                            <option value="0">Select payer</option>
+                            @foreach (var member in finance.Members)
+                            {
+                                <option value="@member.Id">@member.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+
+                <div class="form-grid-two">
+                    <div class="form-group">
+                        <label for="expense-date">Expense date optional</label>
+                        <InputDate id="expense-date" class="flat-input" @bind-Value="expenseForm.ExpenseDate" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="finance-split-type">Split type</label>
+                        <InputSelect id="finance-split-type" class="flat-input" @bind-Value="expenseForm.SplitType">
+                            <option value="equal">Equal split</option>
+                            <option value="custom">Custom amounts</option>
+                        </InputSelect>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Split with</label>
+                    <div class="member-picker">
+                        @foreach (var member in finance.Members)
+                        {
+                            <label class="member-option">
+                                <input type="checkbox" checked="@selectedParticipantIds.Contains(member.Id)" @onchange="args => ToggleParticipant(member.Id, args.Value as bool? == true)" />
+                                <span>
+                                    <strong>@member.Name</strong>
+                                    <small>@member.Role</small>
+                                </span>
+                            </label>
+                        }
+                    </div>
+                </div>
+
+                @if (expenseForm.SplitType == "custom")
+                {
+                    <div class="status-card compact-status">
+                        <p class="status-label">Custom split</p>
+                        <p>Custom amounts must add up to @Money(expenseForm.Amount). Current total: @Money(CustomSplitTotal).</p>
+                    </div>
+
+                    <div class="form-group">
+                        @foreach (var split in selectedSplits)
+                        {
+                            <div class="settings-row finance-row">
+                                <div>
+                                    <strong>@split.Name</strong>
+                                    <small>Custom amount</small>
+                                </div>
+                                <InputNumber class="flat-input split-input" @bind-Value="split.Amount" />
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="hero-actions">
+                    <button type="submit" class="primary-button" disabled="@(isSubmitting || expenseForm.PaidBy == 0 || selectedParticipantIds.Count == 0)">
+                        @(isSubmitting ? "Saving..." : (editingExpenseId is null ? "Save expense" : "Update expense"))
+                    </button>
+
+                    <button type="button" class="action-link-button" @onclick="CancelExpenseForm" disabled="@isSubmitting">
+                        Cancel <span aria-hidden="true">›</span>
+                    </button>
+                </div>
+            </EditForm>
+        }
+
+        @if (activeTab == FinanceTab.Payments && showSettlementForm)
+        {
+            <EditForm Model="settlementForm" OnValidSubmit="CreateSettlementAsync" class="auth-form finance-expense-form">
+                <DataAnnotationsValidator />
+
+                <div class="form-grid-two">
+                    <div class="form-group">
+                        <label for="settlement-from">Paid by optional</label>
+                        <InputSelect id="settlement-from" class="flat-input" @bind-Value="settlementForm.FromUserId">
+                            <option value="0">Use my account</option>
+                            @foreach (var member in finance.Members)
+                            {
+                                <option value="@member.Id">@member.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="settlement-to">Paid to</label>
+                        <InputSelect id="settlement-to" class="flat-input" @bind-Value="settlementForm.ToUserId">
+                            <option value="0">Select receiver</option>
+                            @foreach (var member in finance.Members)
+                            {
+                                <option value="@member.Id">@member.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+
+                <div class="form-grid-two">
+                    <div class="form-group">
+                        <label for="settlement-amount">Amount</label>
+                        <InputNumber id="settlement-amount" class="flat-input" @bind-Value="settlementForm.Amount" />
+                        <ValidationMessage For="() => settlementForm.Amount" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="settlement-date">Paid at optional</label>
+                        <InputDate id="settlement-date" class="flat-input" @bind-Value="settlementForm.PaidAt" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="settlement-notes">Notes optional</label>
+                    <InputText id="settlement-notes" class="flat-input" @bind-Value="settlementForm.Notes" placeholder="Example: bank transfer" />
+                </div>
+
+                <div class="hero-actions">
+                    <button type="submit" class="primary-button" disabled="@(isSubmitting || settlementForm.ToUserId == 0)">
+                        @(isSubmitting ? "Saving..." : "Save payment")
+                    </button>
+
+                    <button type="button" class="action-link-button" @onclick="CancelSettlementForm" disabled="@isSubmitting">
+                        Cancel <span aria-hidden="true">›</span>
+                    </button>
+                </div>
+            </EditForm>
+        }
+
+        <FinanceTabBody
+            ActiveTab="@activeTab.ToString()"
+            Finance="finance"
+            Receipts="receipts"
+            IsSubmitting="isSubmitting"
+            OnEditExpense="EditExpense"
+            OnRemoveExpense="ShowExpenseDeleteConfirm"
+            OnRemovePayment="ShowPaymentDeleteConfirm"
+            OnRemoveReceipt="ShowReceiptDeleteConfirm" />
+    }
+</section>
+
+<ConfirmDialog IsOpen="showDeleteConfirm"
+               IsBusy="isSubmitting"
+               IsDanger="true"
+               Eyebrow="Delete finance item"
+               Title="@deleteTitle"
+               Message="@deleteMessage"
+               ConfirmText="Delete"
+               BusyText="Deleting..."
+               OnConfirm="DeleteConfirmedAsync"
+               OnCancel="HideDeleteConfirm" />
+
+<style>
+    .finance-tabs {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.25rem;
+        margin-top: 1.1rem;
+        border-bottom: 1px solid var(--flat-border);
+    }
+
+    .finance-tab {
+        position: relative;
+        min-height: 3.25rem;
+        border: 0;
+        background: transparent;
+        color: var(--flat-muted);
+        font-weight: 900;
+        text-align: left;
+        padding: 0 0.15rem;
+    }
+
+    .finance-tab.active {
+        color: var(--flat-text);
+    }
+
+    .finance-tab.active::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0.75rem;
+        bottom: -1px;
+        height: 0.18rem;
+        border-radius: 999px;
+        background: var(--flat-primary);
+    }
+
+    .finance-actions {
+        margin-top: 1.1rem;
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private bool showExpenseForm;
+    private bool showSettlementForm;
+    private bool showDeleteConfirm;
+    private int? editingExpenseId;
+    private int? deleteTargetId;
+    private string? deleteTargetType;
+    private string deleteTitle = "Delete this item?";
+    private string deleteMessage = "This action cannot be undone.";
+    private string? errorMessage;
+    private string? successMessage;
+    private FinanceTab activeTab = FinanceTab.Dashboard;
+    private FlatApp.Mobile.Models.Finance.FinanceResponse? finance;
+    private FlatApp.Mobile.Models.Receipts.ReceiptsResponse? receipts;
+    private readonly ExpenseForm expenseForm = new();
+    private readonly SettlementForm settlementForm = new();
+    private List<int> selectedParticipantIds = [];
+    private List<SplitAmountForm> splitAmounts = [];
+
+    private IEnumerable<SplitAmountForm> selectedSplits => splitAmounts.Where(split => selectedParticipantIds.Contains(split.MemberId));
+
+    private decimal CustomSplitTotal => selectedSplits.Sum(split => split.Amount);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var financeTask = FinanceService.GetAsync();
+            var receiptsTask = ReceiptService.GetAsync();
+
+            await Task.WhenAll(financeTask, receiptsTask);
+
+            finance = financeTask.Result;
+            receipts = receiptsTask.Result;
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load finance. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SetTab(FinanceTab tab)
+    {
+        activeTab = tab;
+        showExpenseForm = false;
+        showSettlementForm = false;
+        successMessage = null;
+        errorMessage = null;
+    }
+
+    private void ToggleExpenseForm()
+    {
+        activeTab = FinanceTab.Expenses;
+        showExpenseForm = !showExpenseForm;
+        showSettlementForm = false;
+
+        if (showExpenseForm)
+        {
+            ResetExpenseForm();
+        }
+    }
+
+    private void ToggleSettlementForm()
+    {
+        activeTab = FinanceTab.Payments;
+        showSettlementForm = !showSettlementForm;
+        showExpenseForm = false;
+
+        if (showSettlementForm)
+        {
+            ResetSettlementForm();
+        }
+    }
+
+    private void CancelExpenseForm()
+    {
+        showExpenseForm = false;
+        ResetExpenseForm();
+    }
+
+    private void CancelSettlementForm()
+    {
+        showSettlementForm = false;
+        ResetSettlementForm();
+    }
+
+    private void ResetExpenseForm()
+    {
+        editingExpenseId = null;
+        expenseForm.Title = string.Empty;
+        expenseForm.Amount = 0;
+        expenseForm.Category = "other";
+        expenseForm.PaidBy = finance?.Members.FirstOrDefault()?.Id ?? 0;
+        expenseForm.SplitType = "equal";
+        expenseForm.ExpenseDate = DateTime.Today;
+        selectedParticipantIds = finance?.Members.Select(member => member.Id).ToList() ?? [];
+        splitAmounts = finance?.Members.Select(member => new SplitAmountForm(member.Id, member.Name)).ToList() ?? [];
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private void ResetSettlementForm()
+    {
+        settlementForm.FromUserId = 0;
+        settlementForm.ToUserId = 0;
+        settlementForm.Amount = 0;
+        settlementForm.PaidAt = DateTime.Today;
+        settlementForm.Notes = null;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private void EditExpense(FlatApp.Mobile.Models.Finance.FinanceExpense expense)
+    {
+        editingExpenseId = expense.Id;
+        activeTab = FinanceTab.Expenses;
+        showExpenseForm = true;
+        showSettlementForm = false;
+        expenseForm.Title = expense.Title;
+        expenseForm.Amount = expense.Amount;
+        expenseForm.Category = expense.Category;
+        expenseForm.PaidBy = expense.PaidBy;
+        expenseForm.SplitType = "custom";
+        expenseForm.ExpenseDate = DateTime.TryParse(expense.ExpenseDate, out var date) ? date : DateTime.Today;
+        selectedParticipantIds = expense.Splits.Select(split => split.UserId).ToList();
+        splitAmounts = finance?.Members.Select(member =>
+        {
+            var existingSplit = expense.Splits.FirstOrDefault(split => split.UserId == member.Id);
+            return new SplitAmountForm(member.Id, member.Name)
+            {
+                Amount = existingSplit?.Amount ?? 0,
+            };
+        }).ToList() ?? [];
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private void ToggleParticipant(int id, bool selected)
+    {
+        if (selected && !selectedParticipantIds.Contains(id))
+        {
+            selectedParticipantIds.Add(id);
+        }
+
+        if (!selected)
+        {
+            selectedParticipantIds.Remove(id);
+        }
+    }
+
+    private async Task SaveExpenseAsync()
+    {
+        if (expenseForm.PaidBy == 0)
+        {
+            errorMessage = "Select who paid for this expense.";
+            return;
+        }
+
+        if (selectedParticipantIds.Count == 0)
+        {
+            errorMessage = "Select at least one person to split with.";
+            return;
+        }
+
+        var customSplits = new Dictionary<int, decimal>();
+
+        if (expenseForm.SplitType == "custom")
+        {
+            customSplits = selectedSplits.ToDictionary(split => split.MemberId, split => split.Amount);
+
+            if (customSplits.Values.Any(amount => amount <= 0))
+            {
+                errorMessage = "Enter a positive custom amount for each selected participant.";
+                return;
+            }
+
+            if (Math.Round(customSplits.Values.Sum(), 2) != Math.Round(expenseForm.Amount, 2))
+            {
+                errorMessage = "Custom split amounts must equal the total expense amount.";
+                return;
+            }
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var request = new FlatApp.Mobile.Models.Finance.CreateFinanceExpenseRequest(
+                expenseForm.Title.Trim(),
+                expenseForm.Amount,
+                expenseForm.Category,
+                expenseForm.PaidBy,
+                selectedParticipantIds,
+                expenseForm.SplitType,
+                customSplits,
+                expenseForm.ExpenseDate?.ToString("yyyy-MM-dd"));
+
+            if (editingExpenseId is null)
+            {
+                await FinanceService.CreateExpenseAsync(request);
+                successMessage = "Expense added.";
+            }
+            else
+            {
+                await FinanceService.UpdateExpenseAsync(editingExpenseId.Value, request);
+                successMessage = "Expense updated.";
+            }
+
+            showExpenseForm = false;
+            ResetExpenseForm();
+            await LoadAsync();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to save the expense.");
+            Console.WriteLine($"Finance expense failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to save the expense. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task CreateSettlementAsync()
+    {
+        if (settlementForm.ToUserId == 0)
+        {
+            errorMessage = "Select who received the payment.";
+            return;
+        }
+
+        if (settlementForm.FromUserId != 0 && settlementForm.FromUserId == settlementForm.ToUserId)
+        {
+            errorMessage = "The payer and receiver must be different people.";
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await FinanceService.CreateSettlementAsync(new FlatApp.Mobile.Models.Finance.CreateFinanceSettlementRequest(
+                settlementForm.FromUserId == 0 ? null : settlementForm.FromUserId,
+                settlementForm.ToUserId,
+                settlementForm.Amount,
+                settlementForm.PaidAt?.ToString("yyyy-MM-dd"),
+                string.IsNullOrWhiteSpace(settlementForm.Notes) ? null : settlementForm.Notes.Trim()));
+
+            successMessage = "Payment recorded.";
+            showSettlementForm = false;
+            ResetSettlementForm();
+            await LoadAsync();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to record the payment.");
+            Console.WriteLine($"Finance settlement failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to record the payment. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ShowExpenseDeleteConfirm(int id)
+    {
+        ShowDeleteConfirm("expense", id, "Delete this expense?", "This will remove the expense and update shared balances. This action cannot be undone.");
+    }
+
+    private void ShowPaymentDeleteConfirm(int id)
+    {
+        ShowDeleteConfirm("payment", id, "Delete this payment?", "This will remove the recorded payment and update balances. This action cannot be undone.");
+    }
+
+    private void ShowReceiptDeleteConfirm(int id)
+    {
+        ShowDeleteConfirm("receipt", id, "Delete this receipt?", "This will remove the receipt attachment from this flat. This action cannot be undone.");
+    }
+
+    private void ShowDeleteConfirm(string type, int id, string title, string message)
+    {
+        deleteTargetType = type;
+        deleteTargetId = id;
+        deleteTitle = title;
+        deleteMessage = message;
+        showDeleteConfirm = true;
+    }
+
+    private void HideDeleteConfirm()
+    {
+        showDeleteConfirm = false;
+        deleteTargetType = null;
+        deleteTargetId = null;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (deleteTargetId is null || string.IsNullOrWhiteSpace(deleteTargetType))
+        {
+            return;
+        }
+
+        var id = deleteTargetId.Value;
+        var type = deleteTargetType;
+
+        switch (type)
+        {
+            case "expense":
+                await DeleteExpenseAsync(id);
+                break;
+            case "payment":
+                await DeleteSettlementAsync(id);
+                break;
+            case "receipt":
+                await DeleteReceiptAsync(id);
+                break;
+        }
+    }
+
+    private async Task DeleteExpenseAsync(int id)
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await FinanceService.DeleteExpenseAsync(id);
+            successMessage = "Expense deleted.";
+            HideDeleteConfirm();
+            await LoadAsync();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to delete the expense.");
+            Console.WriteLine($"Finance delete failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to delete the expense. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task DeleteSettlementAsync(int id)
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await FinanceService.DeleteSettlementAsync(id);
+            successMessage = "Payment deleted.";
+            HideDeleteConfirm();
+            await LoadAsync();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to delete the payment.");
+            Console.WriteLine($"Finance settlement delete failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to delete the payment. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task DeleteReceiptAsync(int id)
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await ReceiptService.DeleteAsync(id);
+            successMessage = "Receipt deleted.";
+            HideDeleteConfirm();
+            await LoadAsync();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to delete the receipt.");
+            Console.WriteLine($"Receipt delete failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to delete the receipt. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private static string Money(decimal amount)
+    {
+        return $"${amount:0.00}";
+    }
+
+    private enum FinanceTab
+    {
+        Dashboard,
+        Expenses,
+        Payments,
+        Receipts
+    }
+
+    private sealed class ExpenseForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(2)]
+        public string Title { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Range(0.01, 999999)]
+        public decimal Amount { get; set; }
+
+        public string Category { get; set; } = "other";
+
+        public int PaidBy { get; set; }
+
+        public string SplitType { get; set; } = "equal";
+
+        public DateTime? ExpenseDate { get; set; } = DateTime.Today;
+    }
+
+    private sealed class SettlementForm
+    {
+        public int FromUserId { get; set; }
+
+        public int ToUserId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Range(0.01, 999999)]
+        public decimal Amount { get; set; }
+
+        public DateTime? PaidAt { get; set; } = DateTime.Today;
+
+        public string? Notes { get; set; }
+    }
+
+    private sealed class SplitAmountForm(int memberId, string name)
+    {
+        public int MemberId { get; } = memberId;
+
+        public string Name { get; } = name;
+
+        public decimal Amount { get; set; }
+    }
+}

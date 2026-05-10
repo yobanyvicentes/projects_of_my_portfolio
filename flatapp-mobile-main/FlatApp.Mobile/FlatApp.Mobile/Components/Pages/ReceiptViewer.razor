@@ -1,0 +1,69 @@
+@page "/receipt-viewer"
+@inject NavigationManager Navigation
+@inject FlatApp.Mobile.Services.Receipts.IReceiptFileService ReceiptFileService
+
+<section class="placeholder-card">
+    <p class="status-label">Receipt</p>
+    <h1>@title</h1>
+    <p>@message</p>
+
+    <div class="hero-actions">
+        <button type="button" class="primary-button" @onclick="OpenAgainAsync" disabled="@(string.IsNullOrWhiteSpace(receiptUrl) || isOpening)">
+            @(isOpening ? "Opening..." : "Open again")
+        </button>
+        <a class="action-link-button" href="finance">Back to finance <span aria-hidden="true">›</span></a>
+    </div>
+</section>
+
+@code {
+    private string? receiptUrl;
+    private string? localFilePath;
+    private bool isOpening;
+    private string title = "Opening receipt...";
+    private string message = "The file should open in your browser or a compatible app.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        receiptUrl = query.Get("url");
+
+        await OpenAgainAsync();
+    }
+
+    private async Task OpenAgainAsync()
+    {
+        if (string.IsNullOrWhiteSpace(receiptUrl))
+        {
+            title = "Receipt unavailable";
+            message = "No receipt URL was provided.";
+            return;
+        }
+
+        isOpening = true;
+        title = "Opening receipt...";
+        message = "Downloading the protected receipt with your FlatNZ session.";
+
+        try
+        {
+            localFilePath ??= await ReceiptFileService.DownloadToCacheAsync(receiptUrl);
+            await Microsoft.Maui.ApplicationModel.Launcher.OpenAsync(new OpenFileRequest
+            {
+                File = new ReadOnlyFile(localFilePath),
+            });
+
+            title = "Receipt opened";
+            message = "The protected receipt was downloaded securely and opened on this device.";
+        }
+        catch (Exception ex)
+        {
+            title = "Unable to open receipt";
+            message = "We could not open this protected receipt. Please confirm you are logged in and still belong to this flat.";
+            Console.WriteLine($"Receipt open failed: {ex.Message}");
+        }
+        finally
+        {
+            isOpening = false;
+        }
+    }
+}

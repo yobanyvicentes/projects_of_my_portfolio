@@ -1,0 +1,514 @@
+@page "/flat-onboarding"
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card flat-onboarding-page">
+    @if (isLoading)
+    {
+        <p class="status-label">Flats</p>
+        <h1>Manage flats</h1>
+        <p>Loading your homes and current flat.</p>
+    }
+    else if (hasExistingFlats)
+    {
+        <p class="status-label">Flat management</p>
+        <h1>Manage your flats</h1>
+        <p>Review your current flat, switch between homes, and manage people, requests, and activity.</p>
+    }
+    else
+    {
+        <p class="status-label">Flat setup</p>
+        <h1>Create or join a flat</h1>
+        <p>This is the first required step after creating your account. Set up your home or request access with an invite code.</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+
+    @if (!isLoading && hasExistingFlats)
+    {
+        @if (currentFlat is not null)
+        {
+            <div class="flat-current-card">
+                <div class="flat-home-icon" aria-hidden="true">⌂</div>
+                <div>
+                    <p class="status-label">Current home</p>
+                    <h2>@currentFlat.Name</h2>
+                    <p>@(string.IsNullOrWhiteSpace(currentFlat.Address) ? "No address saved yet." : currentFlat.Address)</p>
+                </div>
+                <span>Current</span>
+            </div>
+
+            <div class="flat-management-shortcuts">
+                <a href="members"><span>👥</span><strong>Members</strong><small>Review roles</small></a>
+                <a href="join-requests"><span>+</span><strong>Join requests</strong><small>Approve access</small></a>
+                <a href="activity"><span>↻</span><strong>Activity</strong><small>Audit updates</small></a>
+                <a href="profile"><span>☼</span><strong>Profile</strong><small>Edit details</small></a>
+            </div>
+        }
+
+        <div class="onboarding-panel flat-panel-card">
+            <div>
+                <p class="status-label">Your flats</p>
+                <h2>Switch current flat</h2>
+                <p>Select which home you want to manage in the mobile app.</p>
+            </div>
+
+            @if (flats.Count == 0)
+            {
+                <p>No flats found for this account.</p>
+            }
+            else
+            {
+                <div class="settings-stack flat-switch-list">
+                    @foreach (var flat in flats)
+                    {
+                        var isCurrent = currentFlat?.Id == flat.Id;
+
+                        <div class="settings-row flat-switch-row">
+                            <div>
+                                <strong>@flat.Name</strong>
+                                <small>@(string.IsNullOrWhiteSpace(flat.Address) ? "No address saved" : flat.Address)</small>
+                            </div>
+
+                            @if (isCurrent)
+                            {
+                                <span class="settings-pill">Current</span>
+                            }
+                            else
+                            {
+                                <button type="button" class="settings-link" @onclick="() => SwitchFlatAsync(flat.Id)" disabled="@isSubmitting">
+                                    Switch
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="status-card compact-status add-home-card">
+            <p class="status-label">Add another home</p>
+            <h2>Create or join another flat</h2>
+            <p>Create another flat or request access to an existing home with an invite code.</p>
+            <div class="hero-actions">
+                <button type="button" class="primary-button" @onclick="ShowCreateMode">Create flat</button>
+                <button type="button" class="secondary-button" @onclick="ShowJoinMode">Join flat</button>
+            </div>
+        </div>
+    }
+
+    @if (!isLoading && (!hasExistingFlats || showSetupForm))
+    {
+        <div class="segment-control flat-segment-control" role="tablist" aria-label="Flat setup options">
+            <button type="button" class="segment-button @(mode == OnboardingMode.Create ? "active" : string.Empty)" @onclick="ShowCreateMode">
+                Create flat
+            </button>
+            <button type="button" class="segment-button @(mode == OnboardingMode.Join ? "active" : string.Empty)" @onclick="ShowJoinMode">
+                Join flat
+            </button>
+        </div>
+
+        @if (mode == OnboardingMode.Create)
+        {
+            <div class="onboarding-panel flat-panel-card setup-card">
+                <div>
+                    <p class="status-label">New home</p>
+                    <h2>Start a flat as admin</h2>
+                    <p>Create the flat, then invite flatmates and manage shared home details.</p>
+                </div>
+
+                <EditForm Model="createForm" OnValidSubmit="CreateFlatAsync" class="auth-form flat-setup-form">
+                    <DataAnnotationsValidator />
+
+                    <div class="form-group">
+                        <label for="flat-name">Flat name</label>
+                        <InputText id="flat-name" class="flat-input" @bind-Value="createForm.Name" placeholder="Example: Wellington Central Flat" />
+                        <ValidationMessage For="() => createForm.Name" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="flat-address">Address optional</label>
+                        <InputText id="flat-address" class="flat-input" @bind-Value="createForm.Address" placeholder="Example: Wellington, NZ" />
+                    </div>
+
+                    <button type="submit" class="primary-button full-width" disabled="@isSubmitting">
+                        @(isSubmitting ? "Creating flat..." : "Create flat")
+                    </button>
+                </EditForm>
+            </div>
+        }
+        else
+        {
+            <div class="onboarding-panel flat-panel-card setup-card">
+                <div>
+                    <p class="status-label">Existing home</p>
+                    <h2>Request access</h2>
+                    <p>Enter the invite code shared by your flat admin. Your request may need approval before the flat appears on your dashboard.</p>
+                </div>
+
+                <EditForm Model="joinForm" OnValidSubmit="JoinFlatAsync" class="auth-form flat-setup-form">
+                    <DataAnnotationsValidator />
+
+                    <div class="form-group">
+                        <label for="invite-code">Invite code</label>
+                        <InputText id="invite-code" class="flat-input invite-input" @bind-Value="joinForm.InviteCode" placeholder="ABC123" />
+                        <ValidationMessage For="() => joinForm.InviteCode" />
+                    </div>
+
+                    <button type="submit" class="primary-button full-width" disabled="@isSubmitting">
+                        @(isSubmitting ? "Sending request..." : "Request access")
+                    </button>
+                </EditForm>
+            </div>
+        }
+
+        <div class="status-card compact-status next-step-card">
+            <p class="status-label">What happens next?</p>
+            <h2>Next step</h2>
+            <p>@nextStepText</p>
+
+            @if (hasExistingFlats)
+            {
+                <div class="hero-actions">
+                    <button type="button" class="secondary-button" @onclick="HideSetupForm">Back to flat management</button>
+                </div>
+            }
+
+            @if (joinRequestSent)
+            {
+                <div class="hero-actions">
+                    <a class="primary-button" href="dashboard">Check dashboard</a>
+                    <a class="secondary-button" href="settings">Open settings</a>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+<style>
+    .flat-onboarding-page {
+        padding-bottom: 7rem;
+    }
+
+    .flat-current-card,
+    .flat-panel-card,
+    .flat-switch-row,
+    .add-home-card,
+    .next-step-card {
+        border: 1px solid var(--flat-border);
+        border-radius: 1.2rem;
+        background: color-mix(in srgb, var(--flat-card) 92%, transparent);
+    }
+
+    .flat-current-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: .9rem;
+        align-items: center;
+        margin-top: 1rem;
+        padding: 1rem;
+        border-color: color-mix(in srgb, var(--flat-primary) 35%, var(--flat-border));
+        background: color-mix(in srgb, var(--flat-primary) 7%, var(--flat-card));
+    }
+
+    .flat-home-icon {
+        display: grid;
+        place-items: center;
+        width: 3rem;
+        height: 3rem;
+        border-radius: 999px;
+        color: var(--flat-primary);
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        background: color-mix(in srgb, var(--flat-primary) 8%, transparent);
+        font-weight: 950;
+    }
+
+    .flat-current-card h2,
+    .flat-current-card p,
+    .flat-panel-card h2,
+    .flat-panel-card p,
+    .add-home-card h2,
+    .next-step-card h2 {
+        margin: 0;
+    }
+
+    .flat-current-card h2,
+    .flat-panel-card h2,
+    .add-home-card h2,
+    .next-step-card h2 {
+        color: var(--flat-text);
+        font-size: 1.2rem;
+    }
+
+    .flat-current-card p:last-child,
+    .flat-panel-card p:last-child {
+        color: var(--flat-muted);
+    }
+
+    .flat-current-card > span {
+        padding: .3rem .65rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        color: var(--flat-primary);
+        font-size: .72rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .flat-management-shortcuts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .65rem;
+        margin-top: 1rem;
+    }
+
+    .flat-management-shortcuts a {
+        display: grid;
+        gap: .25rem;
+        padding: .85rem;
+        border-radius: 1rem;
+        border: 1px solid var(--flat-border);
+        background: rgba(11, 17, 28, .56);
+        color: var(--flat-text);
+        text-decoration: none;
+    }
+
+    .flat-management-shortcuts span {
+        color: var(--flat-primary);
+        font-weight: 950;
+    }
+
+    .flat-management-shortcuts strong {
+        font-size: .9rem;
+        line-height: 1.2;
+    }
+
+    .flat-management-shortcuts small,
+    .flat-switch-row small {
+        color: var(--flat-muted);
+        font-size: .75rem;
+    }
+
+    .flat-panel-card {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding: 1rem;
+    }
+
+    .flat-switch-list {
+        gap: .65rem;
+    }
+
+    .flat-switch-row {
+        background: rgba(11, 17, 28, .56);
+    }
+
+    .flat-segment-control {
+        margin-top: 1rem;
+    }
+
+    .flat-setup-form {
+        margin-top: 0;
+    }
+
+    .setup-card {
+        border-color: color-mix(in srgb, var(--flat-primary) 28%, var(--flat-border));
+    }
+
+    .add-home-card,
+    .next-step-card {
+        margin-top: 1rem;
+    }
+
+    @@media (max-width: 430px) {
+        .flat-current-card {
+            grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .flat-current-card > span {
+            grid-column: 1 / -1;
+            justify-self: start;
+        }
+
+        .flat-management-shortcuts {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    private OnboardingMode mode = OnboardingMode.Create;
+    private readonly CreateFlatForm createForm = new();
+    private readonly JoinFlatForm joinForm = new();
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private bool joinRequestSent;
+    private bool showSetupForm;
+    private string? errorMessage;
+    private string? successMessage;
+    private string nextStepText = "After creating a flat, you will go back to Dashboard and see your new home.";
+    private FlatApp.Mobile.Models.Flats.FlatSummary? currentFlat;
+    private List<FlatApp.Mobile.Models.Flats.FlatSummary> flats = [];
+
+    private bool hasExistingFlats => currentFlat is not null || flats.Count > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFlatsAsync();
+    }
+
+    private async Task LoadFlatsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var response = await FlatService.GetCurrentAsync();
+            currentFlat = response?.CurrentFlat;
+            flats = response?.Flats?.ToList() ?? [];
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load your flats. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowCreateMode()
+    {
+        mode = OnboardingMode.Create;
+        showSetupForm = true;
+        joinRequestSent = false;
+        errorMessage = null;
+        successMessage = null;
+        nextStepText = "After creating a flat, you will go back to Dashboard and see your new home.";
+    }
+
+    private void ShowJoinMode()
+    {
+        mode = OnboardingMode.Join;
+        showSetupForm = true;
+        errorMessage = null;
+        successMessage = null;
+        nextStepText = "After sending a join request, you will see a pending message until the flat admin approves it.";
+    }
+
+    private void HideSetupForm()
+    {
+        showSetupForm = false;
+        joinRequestSent = false;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private async Task SwitchFlatAsync(int flatId)
+    {
+        await RunAsync(async () =>
+        {
+            var response = await FlatService.SetCurrentAsync(flatId);
+            currentFlat = response?.CurrentFlat;
+            flats = response?.Flats?.ToList() ?? flats;
+            successMessage = currentFlat is not null ? $"{currentFlat.Name} is now your current flat." : "Current flat updated.";
+        }, "Unable to switch flats. Please check your connection and try again.");
+    }
+
+    private async Task CreateFlatAsync()
+    {
+        var flatName = createForm.Name.Trim();
+        var address = string.IsNullOrWhiteSpace(createForm.Address) ? null : createForm.Address.Trim();
+
+        await RunAsync(async () =>
+        {
+            var response = await FlatService.CreateFlatAsync(flatName, address);
+            currentFlat = response?.CurrentFlat;
+            flats = response?.Flats?.ToList() ?? flats;
+            successMessage = response?.CurrentFlat is not null
+                ? $"{response.CurrentFlat.Name} is ready."
+                : "Flat created.";
+            showSetupForm = false;
+        }, "Unable to create the flat. Please check your connection and try again.");
+    }
+
+    private async Task JoinFlatAsync()
+    {
+        var inviteCode = joinForm.InviteCode.Trim().ToUpperInvariant();
+
+        await RunAsync(async () =>
+        {
+            var response = await FlatService.JoinFlatAsync(inviteCode);
+            successMessage = response?.Message ?? "Join request sent. The flat admin may need to approve your request before it appears on your dashboard.";
+            nextStepText = "Your request has been sent. Use Dashboard to check whether access has been approved, or Settings to review your account.";
+            joinRequestSent = true;
+        }, "Unable to send the join request. Please check the invite code and try again.");
+    }
+
+    private async Task RunAsync(Func<Task> action, string fallbackError)
+    {
+        errorMessage = null;
+        successMessage = null;
+        isSubmitting = true;
+
+        try
+        {
+            await action();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage(fallbackError);
+            Console.WriteLine($"Flat onboarding failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = fallbackError;
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private enum OnboardingMode
+    {
+        Create,
+        Join
+    }
+
+    private sealed class CreateFlatForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(2)]
+        public string Name { get; set; } = string.Empty;
+
+        public string? Address { get; set; }
+    }
+
+    private sealed class JoinFlatForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(4)]
+        public string InviteCode { get; set; } = string.Empty;
+    }
+}

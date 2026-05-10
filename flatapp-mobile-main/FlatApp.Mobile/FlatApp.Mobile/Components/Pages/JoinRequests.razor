@@ -1,0 +1,295 @@
+@page "/join-requests"
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card join-requests-page">
+    <p class="status-label">Join requests</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading requests...</h1>
+        <p>Checking pending requests for your current flat.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <h1>Unable to load requests</h1>
+        <p>@errorMessage</p>
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadAsync">Try again</button>
+            <a class="secondary-button" href="settings">Back to settings</a>
+        </div>
+    }
+    else
+    {
+        <h1>Review pending flatmates</h1>
+        <p>Approve people you recognise, or reject requests that should not access your flat.</p>
+
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="alert alert-success">@successMessage</div>
+        }
+
+        @if (joinRequests.Count == 0)
+        {
+            <div class="status-card compact-status join-empty-card">
+                <p class="status-label">No pending join requests</p>
+                <p>Your current flat does not have any access requests waiting for review.</p>
+                <div class="hero-actions">
+                    <a class="primary-button" href="settings">Back to settings</a>
+                    <a class="secondary-button" href="flat-onboarding">Manage flats</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="join-request-card-list">
+                @foreach (var request in joinRequests)
+                {
+                    <article class="join-request-card">
+                        <div class="join-request-avatar" aria-hidden="true">@Initial(request.UserName)</div>
+                        <div class="join-request-content">
+                            <div class="join-request-header">
+                                <strong>@request.UserName</strong>
+                                <span>Pending</span>
+                            </div>
+                            <small>@request.UserEmail</small>
+                            <small>Requested @FormatDate(request.CreatedAt)</small>
+                            <div class="join-request-actions review-actions">
+                                <button type="button" class="settings-link approve-link" @onclick="() => ApproveAsync(request.Id)" disabled="@IsBusy(request.Id)">
+                                    @(busyRequestId == request.Id ? "Saving..." : "Approve")
+                                </button>
+                                <button type="button" class="settings-link danger-link" @onclick="() => ShowRejectConfirm(request.Id, request.UserName)" disabled="@IsBusy(request.Id)">
+                                    Reject
+                                </button>
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    }
+</section>
+
+<ConfirmDialog IsOpen="showRejectConfirm"
+               IsBusy="@(busyRequestId == rejectRequestId)"
+               IsDanger="true"
+               Eyebrow="Reject request"
+               Title="Reject this join request?"
+               Message="@rejectMessage"
+               ConfirmText="Reject"
+               BusyText="Rejecting..."
+               OnConfirm="RejectConfirmedAsync"
+               OnCancel="HideRejectConfirm" />
+
+<style>
+    .join-requests-page {
+        padding-bottom: 7rem;
+    }
+
+    .join-request-card-list {
+        display: grid;
+        gap: .85rem;
+        margin-top: 1.1rem;
+    }
+
+    .join-request-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: .9rem;
+        padding: 1rem;
+        border: 1px solid var(--flat-border);
+        border-radius: 1.15rem;
+        background: color-mix(in srgb, var(--flat-card) 92%, transparent);
+    }
+
+    .join-request-avatar {
+        display: grid;
+        place-items: center;
+        width: 2.8rem;
+        height: 2.8rem;
+        border-radius: 999px;
+        color: var(--flat-primary);
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        background: color-mix(in srgb, var(--flat-primary) 8%, transparent);
+        font-weight: 900;
+    }
+
+    .join-request-content {
+        display: grid;
+        gap: .35rem;
+        min-width: 0;
+    }
+
+    .join-request-header {
+        display: flex;
+        justify-content: space-between;
+        gap: .75rem;
+        align-items: flex-start;
+    }
+
+    .join-request-header strong {
+        color: var(--flat-text);
+    }
+
+    .join-request-header span {
+        padding: .25rem .55rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        color: var(--flat-primary);
+        font-size: .72rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .join-request-content small {
+        color: var(--flat-muted);
+    }
+
+    .review-actions {
+        margin-top: .3rem;
+    }
+
+    .approve-link {
+        color: var(--flat-primary);
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private bool showRejectConfirm;
+    private int? busyRequestId;
+    private int? rejectRequestId;
+    private string rejectMessage = "This person will not be added to your flat.";
+    private string? errorMessage;
+    private string? successMessage;
+    private List<FlatApp.Mobile.Models.Flats.FlatJoinRequest> joinRequests = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            joinRequests = (await FlatService.GetJoinRequestsAsync()).ToList();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 403)
+        {
+            errorMessage = "Only flat admins can manage join requests.";
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to load join requests. Please check your connection and try again.");
+            Console.WriteLine($"Join requests failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load join requests. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApproveAsync(int id)
+    {
+        await RunActionAsync(id, async () =>
+        {
+            var message = await FlatService.ApproveJoinRequestAsync(id);
+            successMessage = message ?? "Join request approved.";
+            joinRequests = (await FlatService.GetJoinRequestsAsync()).ToList();
+        }, "Unable to approve this request. Please try again.");
+    }
+
+    private void ShowRejectConfirm(int id, string userName)
+    {
+        rejectRequestId = id;
+        rejectMessage = $"Reject {userName}'s request to join this flat? They will not be added as a member.";
+        showRejectConfirm = true;
+    }
+
+    private void HideRejectConfirm()
+    {
+        showRejectConfirm = false;
+        rejectRequestId = null;
+    }
+
+    private async Task RejectConfirmedAsync()
+    {
+        if (rejectRequestId is null)
+        {
+            return;
+        }
+
+        var id = rejectRequestId.Value;
+
+        await RunActionAsync(id, async () =>
+        {
+            var message = await FlatService.RejectJoinRequestAsync(id);
+            successMessage = message ?? "Join request rejected.";
+            HideRejectConfirm();
+            joinRequests = (await FlatService.GetJoinRequestsAsync()).ToList();
+        }, "Unable to reject this request. Please try again.");
+    }
+
+    private async Task RunActionAsync(int id, Func<Task> action, string fallbackError)
+    {
+        busyRequestId = id;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await action();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 403)
+        {
+            errorMessage = "Only flat admins can manage join requests.";
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage(fallbackError);
+            Console.WriteLine($"Join request action failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = fallbackError;
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            busyRequestId = null;
+        }
+    }
+
+    private bool IsBusy(int id)
+    {
+        return busyRequestId == id;
+    }
+
+    private static string Initial(string name)
+    {
+        return string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+    }
+
+    private static string FormatDate(DateTimeOffset? date)
+    {
+        return date?.ToLocalTime().ToString("dd MMM yyyy, h:mm tt") ?? "recently";
+    }
+}

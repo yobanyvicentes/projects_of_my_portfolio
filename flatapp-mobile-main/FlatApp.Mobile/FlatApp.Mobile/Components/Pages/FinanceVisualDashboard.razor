@@ -1,0 +1,164 @@
+@inject FlatApp.Mobile.Services.Finance.IFinanceService FinanceService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card">
+    <p class="status-label">Finance dashboard</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading dashboard...</h1>
+        <p>Preparing your finance overview.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <h1>Unable to load dashboard</h1>
+        <p>@errorMessage</p>
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadAsync">Try again</button>
+            <a class="action-link-button" href="finance">Back to finance <span aria-hidden="true">›</span></a>
+        </div>
+    }
+    else if (finance is null)
+    {
+        <h1>No finance data</h1>
+        <p>Add shared expenses to see your dashboard.</p>
+    }
+    else
+    {
+        <div class="page-heading-row">
+            <div>
+                <h1>Finances</h1>
+                <p>Track shared expenses, payments, and balances.</p>
+            </div>
+        </div>
+
+        <div class="finance-metric-grid">
+            <article class="finance-metric-card"><small>Total</small><strong>@Money(finance.Summary.TotalExpenses)</strong></article>
+            <article class="finance-metric-card"><small>Transactions</small><strong>@finance.Summary.Transactions</strong></article>
+            <article class="finance-metric-card"><small>Avg/User</small><strong>@Money(finance.Summary.AvgPerUser)</strong></article>
+            <article class="finance-metric-card"><small>Top spender</small><strong>@(finance.Summary.TopSpender?.Name ?? "—")</strong></article>
+        </div>
+
+        <div class="finance-balance-strip">
+            <div><small>You owe</small><strong class="finance-negative">@Money(finance.Summary.YouOwe)</strong></div>
+            <div><small>You are owed</small><strong class="finance-positive">@Money(finance.Summary.YouAreOwed)</strong></div>
+            <div><small>Net</small><strong class="@AmountClass(finance.Summary.NetBalance)">@Money(finance.Summary.NetBalance)</strong></div>
+        </div>
+
+        <div class="finance-chart-card">
+            <h2>Spending by user</h2>
+            @if (UserSpending.Count == 0)
+            {
+                <p>No spending data yet.</p>
+            }
+            else
+            {
+                @foreach (var slice in UserSpending)
+                {
+                    <div class="finance-progress-row">
+                        <div><span>@slice.Label</span><strong>@Money(slice.Amount)</strong></div>
+                        <span class="finance-progress-track"><span class="finance-progress-fill" style="@ProgressStyle(slice.Amount, MaxUserSpending)"></span></span>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="finance-chart-card">
+            <h2>Spending by category</h2>
+            @if (CategorySpending.Count == 0)
+            {
+                <p>No category data yet.</p>
+            }
+            else
+            {
+                <div class="finance-pie" style="@PieStyle(CategorySpending)" aria-hidden="true"></div>
+                <div class="finance-legend">
+                    @foreach (var slice in CategorySpending)
+                    {
+                        <div><span class="finance-dot" style="background:@slice.Color"></span><span>@slice.Label</span><strong>@Money(slice.Amount)</strong></div>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (finance.Balances.Count > 0)
+        {
+            <div class="finance-chart-card">
+                <h2>Balances</h2>
+                @foreach (var balance in finance.Balances)
+                {
+                    <div class="finance-simple-row"><span>@balance.User.Name</span><strong class="@AmountClass(balance.Balance)">@Money(balance.Balance)</strong></div>
+                }
+            </div>
+        }
+
+        @if (finance.OptimizedPayments.Count > 0)
+        {
+            <div class="finance-chart-card">
+                <h2>Who should pay who</h2>
+                @foreach (var payment in finance.OptimizedPayments)
+                {
+                    <div class="finance-simple-row"><span>@payment.From.Name → @payment.To.Name</span><strong>@Money(payment.Amount)</strong></div>
+                }
+            </div>
+        }
+
+        <div class="hero-actions">
+            <a class="action-link-button" href="finance">Open finance tools <span aria-hidden="true">›</span></a>
+        </div>
+    }
+</section>
+
+<style>
+    .finance-metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;margin-top:1.1rem}
+    .finance-metric-card,.finance-balance-strip,.finance-chart-card{border:1px solid var(--flat-border);border-radius:1.35rem;background:rgba(11,17,28,.72);padding:1rem}
+    .finance-metric-card{text-align:center;min-height:6rem;display:flex;flex-direction:column;justify-content:center}
+    .finance-metric-card small,.finance-balance-strip small{color:var(--flat-muted);font-weight:800}.finance-metric-card strong{display:block;margin-top:.35rem;font-size:1.55rem;font-weight:950;line-height:1.05;overflow-wrap:anywhere}
+    .finance-balance-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;margin-top:1rem;text-align:center}.finance-balance-strip strong{display:block;margin-top:.25rem;font-size:1.25rem;font-weight:950}
+    .finance-positive{color:var(--flat-success)!important}.finance-negative{color:#F87171!important}.finance-neutral{color:var(--flat-text)!important}
+    .finance-chart-card{margin-top:1rem}.finance-chart-card h2{margin:0 0 1rem;font-size:1.15rem;font-weight:950;letter-spacing:-.03em}.finance-chart-card p{color:var(--flat-muted)}
+    .finance-progress-row{display:grid;gap:.45rem;margin-top:.9rem}.finance-progress-row div{display:flex;justify-content:space-between;gap:1rem}.finance-progress-row span{color:var(--flat-muted);font-weight:800}.finance-progress-row strong{font-weight:950}.finance-progress-track{display:block;height:.55rem;border-radius:999px;background:rgba(148,163,184,.14);overflow:hidden}.finance-progress-fill{display:block;height:100%;border-radius:inherit;background:var(--flat-primary)}
+    .finance-pie{width:11.5rem;height:11.5rem;margin:0 auto 1.2rem;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.finance-legend{display:grid;gap:.75rem}.finance-legend div,.finance-simple-row{display:flex;align-items:center;justify-content:space-between;gap:1rem}.finance-dot{width:.8rem;height:.8rem;border-radius:999px;flex:0 0 auto}.finance-legend span:nth-child(2){flex:1;color:var(--flat-text);font-weight:800}.finance-legend strong,.finance-simple-row strong{font-weight:950}.finance-simple-row{padding:.55rem 0}.finance-simple-row span{color:var(--flat-text);font-weight:800}
+</style>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private FlatApp.Mobile.Models.Finance.FinanceResponse? finance;
+    private IReadOnlyList<FinanceChartSlice> UserSpending => finance?.Expenses.GroupBy(expense => string.IsNullOrWhiteSpace(expense.PayerName) ? "Unknown" : expense.PayerName!).Select((group, index) => new FinanceChartSlice(group.Key, group.Sum(expense => expense.Amount), ChartColor(index))).OrderByDescending(slice => slice.Amount).ToList() ?? [];
+    private IReadOnlyList<FinanceChartSlice> CategorySpending => finance?.Categories.Select((category, index) => new FinanceChartSlice(CategoryLabel(category.Category), category.Amount, ChartColor(index))).Where(slice => slice.Amount > 0).OrderByDescending(slice => slice.Amount).ToList() ?? [];
+    private decimal MaxUserSpending => UserSpending.Count == 0 ? 0 : UserSpending.Max(slice => slice.Amount);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            finance = await FinanceService.GetAsync();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load finance. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string Money(decimal amount)=>$"${amount:0.00}";
+    private static string AmountClass(decimal amount)=>amount<0?"finance-negative":amount>0?"finance-positive":"finance-neutral";
+    private static string ChartColor(int index)=>new[]{"#00D4FF","#A855F7","#22C55E","#F97316","#F43F5E","#38BDF8"}[index%6];
+    private static string CategoryLabel(string category)=>string.IsNullOrWhiteSpace(category)?"Other":System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(category.Replace("_"," ").ToLowerInvariant());
+    private static string ProgressStyle(decimal amount,decimal max){var width=max<=0?0:Math.Min(100,Math.Max(4,(double)(amount/max*100)));return $"width:{width:0.#}%";}
+    private static string PieStyle(IReadOnlyList<FinanceChartSlice> slices){var total=slices.Sum(slice=>slice.Amount);if(total<=0){return "background:rgba(148,163,184,.14)";} decimal start=0; var parts=new List<string>(); foreach(var slice in slices){var end=start+(slice.Amount/total*100);parts.Add($"{slice.Color} {start:0.##}% {end:0.##}%");start=end;} return $"background:conic-gradient({string.Join(",",parts)})";}
+    private sealed record FinanceChartSlice(string Label, decimal Amount, string Color);
+}

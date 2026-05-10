@@ -1,0 +1,325 @@
+@page "/members"
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card members-page">
+    <p class="status-label">Members</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading members...</h1>
+        <p>Checking active members in your current flat.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <h1>Unable to load members</h1>
+        <p>@errorMessage</p>
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadAsync">Try again</button>
+            <a class="secondary-button" href="settings">Back to settings</a>
+        </div>
+    }
+    else
+    {
+        <h1>Flat members</h1>
+        <p>Review active flatmates and roles for the current flat.</p>
+
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="alert alert-success">@successMessage</div>
+        }
+
+        <div class="dashboard-grid finance-summary-grid members-summary-grid">
+            <article class="summary-tile">
+                <span>👥</span>
+                <strong>@members.Count</strong>
+                <small>Active members</small>
+            </article>
+            <article class="summary-tile">
+                <span>★</span>
+                <strong>@AdminCount</strong>
+                <small>Admins</small>
+            </article>
+        </div>
+
+        @if (members.Count == 0)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">No active members</p>
+                <p>Your current flat does not have active members yet. Share the invite code and approve pending requests to add flatmates.</p>
+                <div class="hero-actions">
+                    <a class="primary-button" href="settings">Open settings</a>
+                    <a class="secondary-button" href="join-requests">Review requests</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="member-card-list">
+                @foreach (var member in members)
+                {
+                    <article class="member-card">
+                        <div class="member-avatar" aria-hidden="true">@Initial(member.Name)</div>
+                        <div class="member-details">
+                            <div class="member-header">
+                                <strong>@member.Name</strong>
+                                <span>@FormatRole(member.Role)</span>
+                            </div>
+                            <small>@member.Email</small>
+                            <div class="join-request-actions member-actions">
+                                <button type="button" class="settings-link" @onclick="() => ToggleRoleAsync(member)" disabled="@IsBusy(member.Id)">
+                                    @(busyMemberId == member.Id ? "Saving..." : ToggleRoleLabel(member.Role))
+                                </button>
+                                <button type="button" class="settings-link danger-link" @onclick="() => ShowRemoveConfirm(member)" disabled="@IsBusy(member.Id)">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    }
+</section>
+
+<ConfirmDialog IsOpen="showRemoveConfirm"
+               IsBusy="@(busyMemberId == memberToRemove?.Id)"
+               IsDanger="true"
+               Eyebrow="Remove member"
+               Title="Remove this member?"
+               Message="@removeMessage"
+               ConfirmText="Remove"
+               BusyText="Removing..."
+               OnConfirm="RemoveConfirmedAsync"
+               OnCancel="HideRemoveConfirm" />
+
+<style>
+    .members-page {
+        padding-bottom: 7rem;
+    }
+
+    .members-summary-grid {
+        margin: 1.1rem 0;
+    }
+
+    .member-card-list {
+        display: grid;
+        gap: .85rem;
+        margin-top: 1rem;
+    }
+
+    .member-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: .9rem;
+        padding: 1rem;
+        border: 1px solid var(--flat-border);
+        border-radius: 1.15rem;
+        background: color-mix(in srgb, var(--flat-card) 92%, transparent);
+    }
+
+    .member-avatar {
+        display: grid;
+        place-items: center;
+        width: 2.8rem;
+        height: 2.8rem;
+        border-radius: 999px;
+        color: var(--flat-primary);
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        background: color-mix(in srgb, var(--flat-primary) 8%, transparent);
+        font-weight: 900;
+    }
+
+    .member-details {
+        display: grid;
+        gap: .35rem;
+        min-width: 0;
+    }
+
+    .member-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: .75rem;
+    }
+
+    .member-header strong {
+        color: var(--flat-text);
+    }
+
+    .member-header span {
+        padding: .25rem .55rem;
+        border-radius: 999px;
+        border: 1px solid var(--flat-border);
+        color: var(--flat-muted);
+        font-size: .72rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .member-details small {
+        color: var(--flat-muted);
+    }
+
+    .member-actions {
+        margin-top: .25rem;
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private bool showRemoveConfirm;
+    private int? busyMemberId;
+    private string? errorMessage;
+    private string? successMessage;
+    private string removeMessage = "This member will lose access to the current flat.";
+    private FlatApp.Mobile.Models.Flats.FlatMember? memberToRemove;
+    private List<FlatApp.Mobile.Models.Flats.FlatMember> members = [];
+
+    private int AdminCount => members.Count(member => string.Equals(member.Role, "admin", StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            members = (await FlatService.GetMembersAsync()).ToList();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 403)
+        {
+            errorMessage = "Create or join a flat before reviewing members.";
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to load members. Please check your connection and try again.");
+            Console.WriteLine($"Members failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load members. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ToggleRoleAsync(FlatApp.Mobile.Models.Flats.FlatMember member)
+    {
+        var nextRole = string.Equals(member.Role, "admin", StringComparison.OrdinalIgnoreCase) ? "flatmate" : "admin";
+
+        await RunMemberActionAsync(member.Id, async () =>
+        {
+            var message = await FlatService.UpdateMemberRoleAsync(member.Id, nextRole);
+            successMessage = message ?? "Member role updated.";
+            await RefreshMembersAsync();
+        }, "Unable to update this member role.");
+    }
+
+    private void ShowRemoveConfirm(FlatApp.Mobile.Models.Flats.FlatMember member)
+    {
+        memberToRemove = member;
+        removeMessage = $"Remove {member.Name} from this flat? They will lose access until they are approved again.";
+        showRemoveConfirm = true;
+    }
+
+    private void HideRemoveConfirm()
+    {
+        showRemoveConfirm = false;
+        memberToRemove = null;
+    }
+
+    private async Task RemoveConfirmedAsync()
+    {
+        if (memberToRemove is null)
+        {
+            return;
+        }
+
+        var member = memberToRemove;
+
+        await RunMemberActionAsync(member.Id, async () =>
+        {
+            var message = await FlatService.RemoveMemberAsync(member.Id);
+            successMessage = message ?? "Member removed.";
+            HideRemoveConfirm();
+            await RefreshMembersAsync();
+        }, "Unable to remove this member.");
+    }
+
+    private async Task RefreshMembersAsync()
+    {
+        members = (await FlatService.GetMembersAsync()).ToList();
+    }
+
+    private async Task RunMemberActionAsync(int memberId, Func<Task> action, string fallbackError)
+    {
+        busyMemberId = memberId;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await action();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 403)
+        {
+            errorMessage = "Only flat admins can manage members.";
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage(fallbackError);
+            Console.WriteLine($"Member action failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = fallbackError;
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            busyMemberId = null;
+        }
+    }
+
+    private bool IsBusy(int id)
+    {
+        return busyMemberId == id;
+    }
+
+    private static string Initial(string name)
+    {
+        return string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+    }
+
+    private static string ToggleRoleLabel(string role)
+    {
+        return string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase)
+            ? "Make flatmate"
+            : "Make admin";
+    }
+
+    private static string FormatRole(string role)
+    {
+        return string.IsNullOrWhiteSpace(role)
+            ? "Flatmate"
+            : string.Join(' ', role.Split(['_', '-'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(word => char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()));
+    }
+}

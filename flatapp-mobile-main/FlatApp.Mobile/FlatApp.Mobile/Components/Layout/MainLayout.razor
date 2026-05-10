@@ -1,0 +1,257 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject FlatApp.Mobile.Services.Auth.IAuthService AuthService
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+@inject NavigationManager Navigation
+
+<div class="app-shell @(isPageTransitioning ? "page-transitioning" : string.Empty)">
+    <header class="app-header">
+        <div>
+            <p class="brand-title">FlatNZ</p>
+            <p class="brand-subtitle">by Yobany Vicentes</p>
+        </div>
+
+        @if (showAuthenticatedChrome)
+        {
+            <div class="header-actions" aria-label="Quick actions">
+                @if (hasCurrentFlat)
+                {
+                    <a class="icon-button notification-button" href="notifications" aria-label="@NotificationLabel">
+                        <span class="header-icon" aria-hidden="true">🔔</span>
+                        @if (pendingJoinRequestCount > 0)
+                        {
+                            <span class="notification-badge" aria-hidden="true">@PendingJoinRequestBadgeText</span>
+                        }
+                    </a>
+                }
+
+                <div class="header-menu-wrapper">
+                    <button type="button" class="icon-button menu-button" aria-label="Open menu" aria-expanded="@showHeaderMenu" @onclick="ToggleHeaderMenu">
+                        <span class="menu-line" aria-hidden="true"></span>
+                        <span class="menu-line" aria-hidden="true"></span>
+                        <span class="menu-line" aria-hidden="true"></span>
+                    </button>
+
+                    @if (showHeaderMenu)
+                    {
+                        <div class="header-menu" role="menu">
+                            <a href="dashboard" role="menuitem" @onclick="CloseHeaderMenu">Home</a>
+                            <a href="settings" role="menuitem" @onclick="CloseHeaderMenu">Settings</a>
+                            <a href="profile" role="menuitem" @onclick="CloseHeaderMenu">My profile</a>
+                            <a href="privacy-policy" role="menuitem" @onclick="CloseHeaderMenu">Privacy policy</a>
+                            <a href="account-deletion" role="menuitem" @onclick="CloseHeaderMenu">Delete account</a>
+
+                            @if (hasCurrentFlat)
+                            {
+                                <a href="finance" role="menuitem" @onclick="CloseHeaderMenu">Finance</a>
+                                <a href="members" role="menuitem" @onclick="CloseHeaderMenu">Members</a>
+                                <a href="join-requests" role="menuitem" @onclick="CloseHeaderMenu">Join requests</a>
+                                <a href="activity" role="menuitem" @onclick="CloseHeaderMenu">Activity</a>
+                            }
+                            else
+                            {
+                                <a href="flat-onboarding" role="menuitem" @onclick="CloseHeaderMenu">Create or join a flat</a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </header>
+
+    <main class="app-content @(showAuthenticatedChrome ? string.Empty : "auth-content")">
+        @Body
+    </main>
+
+    @if (showAuthenticatedChrome)
+    {
+        <NavMenu HasCurrentFlat="hasCurrentFlat" />
+    }
+</div>
+
+@code {
+    private const int PageTransitionDelayMs = 180;
+
+    private bool hasToken;
+    private bool authStateResolved;
+    private bool hasCurrentFlat;
+    private bool showHeaderMenu;
+    private bool isPageTransitioning;
+    private int pendingJoinRequestCount;
+    private int transitionVersion;
+
+    private string currentRoute => Navigation.ToBaseRelativePath(Navigation.Uri)
+        .Split('?', '#')[0]
+        .Trim('/')
+        .ToLowerInvariant();
+
+    private bool isGuestOnlyRoute => currentRoute is "" or "login" or "register";
+
+    private bool isPublicRoute => isGuestOnlyRoute || currentRoute is "privacy-policy" or "account-deletion";
+
+    private bool showAuthenticatedChrome => authStateResolved && hasToken && !isPublicRoute;
+
+    private string PendingJoinRequestBadgeText => pendingJoinRequestCount > 9 ? "9+" : pendingJoinRequestCount.ToString();
+
+    private string NotificationLabel => pendingJoinRequestCount switch
+    {
+        <= 0 => "Open notifications",
+        1 => "Open notifications, 1 pending join request",
+        _ => $"Open notifications, {pendingJoinRequestCount} pending join requests",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += HandleLocationChanged;
+        await RefreshAuthStateAsync();
+    }
+
+    private async void HandleLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        try
+        {
+            showHeaderMenu = false;
+            BeginPageTransition();
+            await RefreshAuthStateAsync();
+            _ = EndPageTransitionAfterDelayAsync(transitionVersion);
+        }
+        catch (Exception)
+        {
+            await SafeResetToLoginAsync();
+        }
+    }
+
+    private void ToggleHeaderMenu()
+    {
+        showHeaderMenu = !showHeaderMenu;
+    }
+
+    private void CloseHeaderMenu()
+    {
+        showHeaderMenu = false;
+    }
+
+    private void BeginPageTransition()
+    {
+        transitionVersion++;
+        isPageTransitioning = true;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task EndPageTransitionAfterDelayAsync(int version)
+    {
+        await Task.Delay(PageTransitionDelayMs);
+
+        if (version != transitionVersion)
+        {
+            return;
+        }
+
+        isPageTransitioning = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshAuthStateAsync()
+    {
+        try
+        {
+            hasToken = await AuthService.IsAuthenticatedAsync();
+            authStateResolved = true;
+
+            if (!hasToken && !isPublicRoute)
+            {
+                pendingJoinRequestCount = 0;
+                hasCurrentFlat = false;
+                Navigation.NavigateTo("login", replace: true);
+                return;
+            }
+
+            if (hasToken && isGuestOnlyRoute)
+            {
+                pendingJoinRequestCount = 0;
+                hasCurrentFlat = false;
+                Navigation.NavigateTo("dashboard", replace: true);
+                return;
+            }
+
+            if (showAuthenticatedChrome)
+            {
+                await RefreshCurrentFlatStateAsync();
+                await RefreshPendingJoinRequestCountAsync();
+            }
+            else
+            {
+                pendingJoinRequestCount = 0;
+                hasCurrentFlat = false;
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception)
+        {
+            await SafeResetToLoginAsync();
+        }
+    }
+
+    private async Task SafeResetToLoginAsync()
+    {
+        hasToken = false;
+        authStateResolved = true;
+        hasCurrentFlat = false;
+        pendingJoinRequestCount = 0;
+        isPageTransitioning = false;
+        showHeaderMenu = false;
+
+        if (!isPublicRoute)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshCurrentFlatStateAsync()
+    {
+        try
+        {
+            var response = await FlatService.GetCurrentAsync();
+            hasCurrentFlat = response?.CurrentFlat is not null;
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode is 401 or 403)
+        {
+            hasCurrentFlat = false;
+        }
+        catch (Exception)
+        {
+            hasCurrentFlat = false;
+        }
+    }
+
+    private async Task RefreshPendingJoinRequestCountAsync()
+    {
+        if (!hasCurrentFlat)
+        {
+            pendingJoinRequestCount = 0;
+            return;
+        }
+
+        try
+        {
+            var requests = await FlatService.GetJoinRequestsAsync();
+            pendingJoinRequestCount = requests.Count;
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode is 401 or 403)
+        {
+            pendingJoinRequestCount = 0;
+        }
+        catch (Exception)
+        {
+            pendingJoinRequestCount = 0;
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= HandleLocationChanged;
+    }
+}

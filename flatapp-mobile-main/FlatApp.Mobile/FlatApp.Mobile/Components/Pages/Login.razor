@@ -1,0 +1,100 @@
+@page "/login"
+@inject FlatApp.Mobile.Services.Auth.IAuthService AuthService
+@inject NavigationManager Navigation
+
+<section class="auth-card">
+    <div>
+        <p class="status-label">Welcome back</p>
+        <h1>Sign in to FlatNZ</h1>
+        <p class="auth-intro">Use the same account you use in the FlatNZ web app.</p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+
+    <EditForm Model="form" OnValidSubmit="SubmitAsync" class="auth-form">
+        <DataAnnotationsValidator />
+
+        <div class="form-group">
+            <label for="login-email">Email</label>
+            <InputText id="login-email" class="flat-input" @bind-Value="form.Email" inputmode="email" autocomplete="email" />
+            <ValidationMessage For="() => form.Email" />
+        </div>
+
+        <div class="form-group">
+            <label for="login-password">Password</label>
+            <InputText id="login-password" type="password" class="flat-input" @bind-Value="form.Password" autocomplete="current-password" />
+            <ValidationMessage For="() => form.Password" />
+        </div>
+
+        <button type="submit" class="primary-button full-width" disabled="@isSubmitting">
+            @(isSubmitting ? "Signing in..." : "Sign in")
+        </button>
+    </EditForm>
+
+    <p class="auth-switch">
+        New to FlatNZ?
+        <a href="register">Create an account</a>
+    </p>
+</section>
+
+@code {
+    private readonly LoginForm form = new();
+    private bool isSubmitting;
+    private string? errorMessage;
+    private string? successMessage;
+
+    private async Task SubmitAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+        isSubmitting = true;
+
+        try
+        {
+            var email = form.Email.Trim();
+            var response = await AuthService.LoginAsync(email, form.Password);
+
+            if (response is null)
+            {
+                errorMessage = "The server returned an empty response.";
+                return;
+            }
+
+            successMessage = $"Signed in as {response.User.Name}.";
+            Navigation.NavigateTo("dashboard", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to sign in.");
+            Console.WriteLine($"Login failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unable to reach the API. {ex.Message}";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private sealed class LoginForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(8)]
+        public string Password { get; set; } = string.Empty;
+    }
+}

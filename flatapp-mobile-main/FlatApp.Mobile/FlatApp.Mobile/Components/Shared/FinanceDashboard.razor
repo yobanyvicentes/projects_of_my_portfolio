@@ -1,0 +1,194 @@
+@using FlatApp.Mobile.Models.Finance
+
+@if (Finance is not null)
+{
+    <div class="status-card compact-status">
+        <p class="status-label">Finance dashboard</p>
+        <h2>Overview</h2>
+        <p>Track spending patterns, balances, and category totals for this flat.</p>
+
+        <div class="dashboard-grid finance-summary-grid">
+            <article class="summary-tile">
+                <span>#</span>
+                <strong>@Finance.Summary.Transactions</strong>
+                <small>Transactions</small>
+            </article>
+
+            <article class="summary-tile">
+                <span>÷</span>
+                <strong>@Money(Finance.Summary.AvgPerUser)</strong>
+                <small>Avg/user</small>
+            </article>
+
+            <article class="summary-tile">
+                <span>★</span>
+                <strong>@(Finance.Summary.TopSpender?.Name ?? "-")</strong>
+                <small>Top spender</small>
+            </article>
+
+            <article class="summary-tile">
+                <span>⌁</span>
+                <strong>@Finance.Categories.Count</strong>
+                <small>Categories</small>
+            </article>
+        </div>
+    </div>
+
+    <div class="status-card compact-status">
+        <p class="status-label">Spending by user</p>
+        @if (SpendingRows.Count == 0)
+        {
+            <p>No spending data yet.</p>
+        }
+        else
+        {
+            <div class="settings-stack">
+                @foreach (var row in SpendingRows)
+                {
+                    <div class="settings-row finance-row">
+                        <div>
+                            <strong>@row.Label</strong>
+                            <small>@Money(row.Amount)</small>
+                            <div class="finance-meter" aria-label="@row.Label spending share">
+                                <div class="finance-meter-fill" style="width: @row.Percentage%;"></div>
+                            </div>
+                        </div>
+                        <span class="settings-pill">@row.Percentage%</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="status-card compact-status">
+        <p class="status-label">Balance distribution</p>
+        @if (BalanceRows.Count == 0)
+        {
+            <p>No balance data yet.</p>
+        }
+        else
+        {
+            <div class="settings-stack">
+                @foreach (var row in BalanceRows)
+                {
+                    <div class="settings-row finance-row">
+                        <div>
+                            <strong>@row.Label</strong>
+                            <small>@(row.Amount >= 0 ? "Is owed" : "Owes") · @Money(row.Amount)</small>
+                            <div class="finance-meter" aria-label="@row.Label balance share">
+                                <div class="finance-meter-fill" style="width: @row.Percentage%;"></div>
+                            </div>
+                        </div>
+                        <span class="settings-pill">@row.Percentage%</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="status-card compact-status">
+        <p class="status-label">Spending by category</p>
+        @if (CategoryRows.Count == 0)
+        {
+            <p>No category data yet.</p>
+        }
+        else
+        {
+            <div class="settings-stack">
+                @foreach (var row in CategoryRows)
+                {
+                    <div class="settings-row finance-row">
+                        <div>
+                            <strong>@FormatCategory(row.Label)</strong>
+                            <small>@Money(row.Amount)</small>
+                            <div class="finance-meter" aria-label="@row.Label category share">
+                                <div class="finance-meter-fill" style="width: @row.Percentage%;"></div>
+                            </div>
+                        </div>
+                        <span class="settings-pill">@row.Percentage%</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public FinanceResponse? Finance { get; set; }
+
+    private IReadOnlyList<FinanceDashboardRow> SpendingRows => Finance is null
+        ? []
+        : Finance.Expenses
+            .Where(expense => expense.Amount > 0)
+            .GroupBy(expense => string.IsNullOrWhiteSpace(expense.PayerName) ? "Flatmate" : expense.PayerName!)
+            .Select(group => new FinanceDashboardRow(group.Key, group.Sum(expense => expense.Amount)))
+            .OrderByDescending(row => row.Amount)
+            .Select(row => row with { Percentage = Percentage(row.Amount, MaxSpendingAmount) })
+            .ToList();
+
+    private IReadOnlyList<FinanceDashboardRow> BalanceRows => Finance is null
+        ? []
+        : Finance.Balances
+            .Select(balance => new FinanceDashboardRow(balance.User.Name, balance.Balance))
+            .OrderByDescending(row => Math.Abs(row.Amount))
+            .Select(row => row with { Percentage = Percentage(Math.Abs(row.Amount), MaxAbsoluteBalance) })
+            .ToList();
+
+    private IReadOnlyList<FinanceDashboardRow> CategoryRows => Finance is null
+        ? []
+        : Finance.Categories
+            .Where(category => category.Amount > 0)
+            .Select(category => new FinanceDashboardRow(category.Category, category.Amount))
+            .OrderByDescending(row => row.Amount)
+            .Select(row => row with { Percentage = Percentage(row.Amount, MaxCategoryAmount) })
+            .ToList();
+
+    private decimal MaxSpendingAmount => Finance?.Expenses
+        .Where(expense => expense.Amount > 0)
+        .GroupBy(expense => string.IsNullOrWhiteSpace(expense.PayerName) ? "Flatmate" : expense.PayerName!)
+        .Select(group => group.Sum(expense => expense.Amount))
+        .DefaultIfEmpty(0)
+        .Max() ?? 0;
+
+    private decimal MaxAbsoluteBalance => Finance?.Balances
+        .Select(balance => Math.Abs(balance.Balance))
+        .DefaultIfEmpty(0)
+        .Max() ?? 0;
+
+    private decimal MaxCategoryAmount => Finance?.Categories
+        .Select(category => category.Amount)
+        .DefaultIfEmpty(0)
+        .Max() ?? 0;
+
+    private static int Percentage(decimal amount, decimal max)
+    {
+        if (amount <= 0 || max <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp((int)Math.Round((amount / max) * 100), 4, 100);
+    }
+
+    private static string Money(decimal amount)
+    {
+        return $"${amount:0.00}";
+    }
+
+    private static string FormatCategory(string category)
+    {
+        if (string.IsNullOrWhiteSpace(category))
+        {
+            return "Other";
+        }
+
+        return string.Join(' ', category.Split(['_', '-'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()));
+    }
+
+    private sealed record FinanceDashboardRow(string Label, decimal Amount)
+    {
+        public int Percentage { get; init; }
+    }
+}

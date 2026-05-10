@@ -1,0 +1,54 @@
+@if (IsOpen)
+{
+    <div class="confirm-backdrop" role="presentation">
+        <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <p class="status-label">@Eyebrow</p>
+            <h2 id="confirm-title">@Title</h2>
+            <p>@Message</p>
+
+            <div class="hero-actions confirm-actions">
+                <button type="button" class="secondary-button" @onclick="OnCancel" disabled="@IsBusy">
+                    @CancelText
+                </button>
+                <button type="button" class="primary-button @(IsDanger ? "danger-button" : string.Empty)" @onclick="OnConfirm" disabled="@IsBusy">
+                    @(IsBusy ? BusyText : ConfirmText)
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public bool IsBusy { get; set; }
+
+    [Parameter]
+    public bool IsDanger { get; set; }
+
+    [Parameter]
+    public string Eyebrow { get; set; } = "Confirm action";
+
+    [Parameter]
+    public string Title { get; set; } = "Are you sure?";
+
+    [Parameter]
+    public string Message { get; set; } = "Please confirm this action.";
+
+    [Parameter]
+    public string ConfirmText { get; set; } = "Confirm";
+
+    [Parameter]
+    public string CancelText { get; set; } = "Cancel";
+
+    [Parameter]
+    public string BusyText { get; set; } = "Working...";
+
+    [Parameter]
+    public EventCallback OnConfirm { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+}

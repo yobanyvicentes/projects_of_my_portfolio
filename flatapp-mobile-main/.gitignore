@@ -1,0 +1,62 @@
+# Build outputs
+bin/
+obj/
+[Bb]uild/
+[Rr]elease/
+[Dd]ebug/
+
+# .NET and IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# NuGet
+*.nupkg
+packages/
+project.lock.json
+project.assets.json
+
+# MAUI / Android artifacts
+*.apk
+*.aab
+*.apks
+*.aar
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.mobileprovision
+*.cer
+*.key
+*.pem
+
+# Android signing / local publish settings
+keystore.properties
+signing.properties
+*.keystore.properties
+*.signing.properties
+
+# iOS / Mac local signing artifacts
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.Development.local.json
+secrets.json
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,352 @@
+@page "/chores/{ChoreId:int}/edit"
+@inject FlatApp.Mobile.Services.Chores.IChoreService ChoreService
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card chore-form-page">
+    <p class="status-label">Edit chore</p>
+    <h1>Update chore</h1>
+    <p>Adjust the chore details, due dates, and rotation members for your current flat.</p>
+
+    @if (isLoading)
+    {
+        <div class="status-card compact-status">
+            <p class="status-label">Loading</p>
+            <p>Loading chore details and flat members...</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+
+        <div class="hero-actions">
+            <a class="secondary-button" href="chores">Back to chores</a>
+        </div>
+    }
+
+    @if (!isLoading && string.IsNullOrWhiteSpace(errorMessage) && members.Count == 0)
+    {
+        <div class="status-card compact-status">
+            <p class="status-label">No members</p>
+            <p>Your current flat has no active members available for chore rotation. Add or approve flatmates before updating this chore.</p>
+            <div class="hero-actions">
+                <a class="primary-button" href="flat-onboarding">Manage flats</a>
+                <a class="secondary-button" href="chores">Back to chores</a>
+            </div>
+        </div>
+    }
+
+    @if (!isLoading && string.IsNullOrWhiteSpace(errorMessage) && members.Count > 0)
+    {
+        <div class="chore-form-summary-card">
+            <div>
+                <p class="status-label">Rotation setup</p>
+                <h2>@selectedMemberIds.Count selected</h2>
+                <p>Update the schedule, effort points, and who participates in this chore rotation.</p>
+            </div>
+            <span>@members.Count active @(members.Count == 1 ? "member" : "members")</span>
+        </div>
+
+        <EditForm Model="form" OnValidSubmit="UpdateAsync" class="auth-form chore-form-card">
+            <DataAnnotationsValidator />
+
+            <div class="chore-form-section">
+                <p class="status-label">Task details</p>
+
+                <div class="form-group">
+                    <label for="chore-title">Title</label>
+                    <InputText id="chore-title" class="flat-input" @bind-Value="form.Title" placeholder="Example: Take out rubbish" />
+                    <ValidationMessage For="() => form.Title" />
+                </div>
+
+                <div class="form-group">
+                    <label for="chore-description">Description optional</label>
+                    <InputTextArea id="chore-description" class="flat-input flat-textarea" @bind-Value="form.Description" placeholder="Add details or instructions" />
+                </div>
+            </div>
+
+            <div class="chore-form-section">
+                <p class="status-label">Schedule and effort</p>
+
+                <div class="form-grid-two">
+                    <div class="form-group">
+                        <label for="chore-frequency">Frequency</label>
+                        <InputSelect id="chore-frequency" class="flat-input" @bind-Value="form.Frequency">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="fortnightly">Fortnightly</option>
+                            <option value="monthly">Monthly</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="chore-effort">Effort</label>
+                        <InputSelect id="chore-effort" class="flat-input" @bind-Value="form.Effort">
+                            <option value="easy">Easy · 1 pt</option>
+                            <option value="normal">Normal · 2 pts</option>
+                            <option value="hard">Hard · 3 pts</option>
+                        </InputSelect>
+                    </div>
+                </div>
+
+                <div class="form-grid-two">
+                    <div class="form-group">
+                        <label for="chore-start-date">Start date optional</label>
+                        <InputDate id="chore-start-date" class="flat-input" @bind-Value="form.StartDate" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="chore-next-due-date">Next due date optional</label>
+                        <InputDate id="chore-next-due-date" class="flat-input" @bind-Value="form.NextDueDate" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="chore-form-section">
+                <p class="status-label">Rotation members</p>
+                <p>Select at least one flatmate. Everyone selected can be included in the chore rotation.</p>
+
+                <div class="member-picker chore-member-picker">
+                    @foreach (var member in members)
+                    {
+                        <label class="member-option">
+                            <input type="checkbox" checked="@selectedMemberIds.Contains(member.Id)" @onchange="args => ToggleMember(member.Id, args.Value as bool? == true)" />
+                            <span>
+                                <strong>@member.Name</strong>
+                                <small>@member.Role</small>
+                            </span>
+                        </label>
+                    }
+                </div>
+            </div>
+
+            <div class="hero-actions">
+                <button type="submit" class="primary-button" disabled="@(isSubmitting || selectedMemberIds.Count == 0)">
+                    @(isSubmitting ? "Saving..." : "Save changes")
+                </button>
+                <a class="secondary-button" href="chores">Cancel</a>
+            </div>
+        </EditForm>
+    }
+</section>
+
+<style>
+    .chore-form-page {
+        padding-bottom: 7rem;
+    }
+
+    .chore-form-summary-card,
+    .chore-form-card,
+    .chore-form-section {
+        border: 1px solid var(--flat-border);
+        border-radius: 1.2rem;
+        background: color-mix(in srgb, var(--flat-card) 92%, transparent);
+    }
+
+    .chore-form-summary-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 1rem;
+        align-items: center;
+        margin-top: 1rem;
+        padding: 1rem;
+        border-color: color-mix(in srgb, var(--flat-primary) 35%, var(--flat-border));
+        background: color-mix(in srgb, var(--flat-primary) 7%, var(--flat-card));
+    }
+
+    .chore-form-summary-card h2,
+    .chore-form-summary-card p,
+    .chore-form-section p {
+        margin: 0;
+    }
+
+    .chore-form-summary-card h2 {
+        color: var(--flat-text);
+        font-size: 1.2rem;
+    }
+
+    .chore-form-summary-card p:last-child,
+    .chore-form-section > p:not(.status-label) {
+        color: var(--flat-muted);
+    }
+
+    .chore-form-summary-card > span {
+        padding: .3rem .65rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        color: var(--flat-primary);
+        font-size: .72rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .chore-form-card {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding: 1rem;
+    }
+
+    .chore-form-section {
+        display: grid;
+        gap: .85rem;
+        padding: 1rem;
+    }
+
+    .chore-member-picker {
+        display: grid;
+        gap: .75rem;
+    }
+
+    @@media (max-width: 430px) {
+        .chore-form-summary-card {
+            grid-template-columns: 1fr;
+        }
+
+        .chore-form-summary-card > span {
+            justify-self: start;
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int ChoreId { get; set; }
+
+    private readonly EditChoreForm form = new();
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private string? errorMessage;
+    private List<FlatApp.Mobile.Models.Flats.FlatMember> members = [];
+    private List<int> selectedMemberIds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var choresTask = ChoreService.GetChoresAsync();
+            var membersTask = FlatService.GetMembersAsync();
+
+            await Task.WhenAll(choresTask, membersTask);
+
+            var chore = choresTask.Result.FirstOrDefault(item => item.Id == ChoreId);
+
+            if (chore is null)
+            {
+                errorMessage = "This chore could not be found in your current flat.";
+                return;
+            }
+
+            members = membersTask.Result.ToList();
+            PopulateForm(chore);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load this chore. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void PopulateForm(FlatApp.Mobile.Models.Chores.ChoreItem chore)
+    {
+        form.Title = chore.Title;
+        form.Description = chore.Description;
+        form.Frequency = chore.Frequency;
+        form.Effort = chore.Effort;
+        form.StartDate = ParseDate(chore.StartDate);
+        form.NextDueDate = ParseDate(chore.NextDueDate);
+        selectedMemberIds = chore.Members.Select(member => member.Id).ToList();
+
+        if (selectedMemberIds.Count == 0 && chore.AssignedTo is not null)
+        {
+            selectedMemberIds.Add(chore.AssignedTo.Value);
+        }
+    }
+
+    private static DateTime? ParseDate(string? value)
+    {
+        return DateTime.TryParse(value, out var parsedDate) ? parsedDate : null;
+    }
+
+    private void ToggleMember(int id, bool selected)
+    {
+        if (selected && !selectedMemberIds.Contains(id))
+        {
+            selectedMemberIds.Add(id);
+        }
+
+        if (!selected)
+        {
+            selectedMemberIds.Remove(id);
+        }
+    }
+
+    private async Task UpdateAsync()
+    {
+        if (selectedMemberIds.Count == 0)
+        {
+            errorMessage = "Select at least one flatmate for the chore rotation.";
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            await ChoreService.UpdateAsync(ChoreId, new FlatApp.Mobile.Models.Chores.UpdateChoreRequest(
+                form.Title.Trim(),
+                string.IsNullOrWhiteSpace(form.Description) ? null : form.Description.Trim(),
+                form.Frequency,
+                form.Effort,
+                form.StartDate?.ToString("yyyy-MM-dd"),
+                form.NextDueDate?.ToString("yyyy-MM-dd"),
+                selectedMemberIds));
+
+            Navigation.NavigateTo("chores", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to update the chore. Check the details and try again.");
+            Console.WriteLine($"Update chore failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to update the chore. Check the details and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private sealed class EditChoreForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(2)]
+        public string Title { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
+
+        public string Frequency { get; set; } = "weekly";
+
+        public string Effort { get; set; } = "normal";
+
+        public DateTime? StartDate { get; set; }
+
+        public DateTime? NextDueDate { get; set; }
+    }
+}

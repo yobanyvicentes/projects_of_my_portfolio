@@ -1,0 +1,53 @@
+@using FlatApp.Mobile.Models.Finance
+
+@if (Finance is null || Finance.Settlements.Count == 0)
+{
+    <div class="status-card compact-status">
+        <p class="status-label">No payments yet</p>
+        <p>Record a payment when one flatmate settles money with another.</p>
+    </div>
+}
+else
+{
+    <div class="status-card compact-status">
+        <p class="status-label">Payments</p>
+        @foreach (var settlement in Finance.Settlements)
+        {
+            <div class="settings-row finance-row">
+                <div>
+                    <strong>@settlement.FromUser.Name → @settlement.ToUser.Name</strong>
+                    <small>@PaymentMeta(settlement)</small>
+                </div>
+                <div class="chore-actions">
+                    <span class="settings-pill">@Money(settlement.Amount)</span>
+                    <button type="button" class="action-link-button" @onclick="() => OnRemove.InvokeAsync(settlement.Id)" disabled="@IsSubmitting">
+                        Remove <span aria-hidden="true">›</span>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public FinanceResponse? Finance { get; set; }
+
+    [Parameter]
+    public bool IsSubmitting { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnRemove { get; set; }
+
+    private static string Money(decimal amount)
+    {
+        return $"${amount:0.00}";
+    }
+
+    private static string PaymentMeta(FinanceSettlement settlement)
+    {
+        return string.IsNullOrWhiteSpace(settlement.Notes)
+            ? settlement.PaidAt ?? "No date"
+            : $"{settlement.PaidAt ?? "No date"} · {settlement.Notes}";
+    }
+}

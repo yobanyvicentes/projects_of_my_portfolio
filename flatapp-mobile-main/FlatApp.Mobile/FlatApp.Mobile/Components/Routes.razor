@@ -1,0 +1,54 @@
+﻿<ErrorBoundary @ref="errorBoundary">
+    <ChildContent>
+        <Router AppAssembly="typeof(MauiProgram).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+            <Found Context="routeData">
+                <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+                <FocusOnNavigate RouteData="routeData" Selector="h1" />
+            </Found>
+        </Router>
+    </ChildContent>
+    <ErrorContent Context="exception">
+        <section class="placeholder-card startup-error-card">
+            <p class="status-label">Startup error</p>
+            <h1>The app could not finish loading</h1>
+#if DEBUG
+            <p class="error-message">@exception.GetType().FullName</p>
+            <p class="error-message">@exception.Message</p>
+
+            @if (exception.InnerException is not null)
+            {
+                <p class="status-label">Inner exception</p>
+                <p class="error-message">@exception.InnerException.GetType().FullName</p>
+                <p class="error-message">@exception.InnerException.Message</p>
+            }
+#else
+            <p>Something went wrong while loading FlatNZ. Please try again or log in again.</p>
+#endif
+
+            <div class="hero-actions">
+                <button type="button" class="primary-button" @onclick="Recover">Try again</button>
+                <a class="action-link-button" href="login">Go to login <span aria-hidden="true">›</span></a>
+            </div>
+        </section>
+    </ErrorContent>
+</ErrorBoundary>
+
+<style>
+    .startup-error-card {
+        margin: 1rem;
+    }
+
+    .error-message {
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+    }
+</style>
+
+@code {
+    private ErrorBoundary? errorBoundary;
+
+    private void Recover()
+    {
+        errorBoundary?.Recover();
+    }
+}

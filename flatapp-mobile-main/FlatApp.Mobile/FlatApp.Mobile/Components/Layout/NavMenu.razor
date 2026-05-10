@@ -1,0 +1,34 @@
+﻿<nav class="bottom-nav @(HasCurrentFlat ? string.Empty : "bottom-nav-compact")" aria-label="Flat actions">
+    <NavLink class="bottom-nav-item" href="dashboard">
+        <span class="bottom-nav-icon" aria-hidden="true">⌂</span>
+        <span>Home</span>
+    </NavLink>
+
+    @if (HasCurrentFlat)
+    {
+        <NavLink class="bottom-nav-item" href="chores">
+            <span class="bottom-nav-icon" aria-hidden="true">✓</span>
+            <span>Chores</span>
+        </NavLink>
+
+        <NavLink class="bottom-nav-item" href="shopping">
+            <span class="bottom-nav-icon" aria-hidden="true">🛒</span>
+            <span>Shopping</span>
+        </NavLink>
+
+        <NavLink class="bottom-nav-item" href="finance">
+            <span class="bottom-nav-icon" aria-hidden="true">▣</span>
+            <span>Finance</span>
+        </NavLink>
+    }
+
+    <NavLink class="bottom-nav-item" href="settings">
+        <span class="bottom-nav-icon" aria-hidden="true">☼</span>
+        <span>Settings</span>
+    </NavLink>
+</nav>
+
+@code {
+    [Parameter]
+    public bool HasCurrentFlat { get; set; }
+}

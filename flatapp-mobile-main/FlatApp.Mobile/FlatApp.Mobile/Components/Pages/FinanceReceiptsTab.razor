@@ -1,0 +1,69 @@
+@using FlatApp.Mobile.Models.Receipts
+@inject NavigationManager Navigation
+
+@if (Receipts?.Quota is not null)
+{
+    <div class="status-card compact-status">
+        <p class="status-label">Receipts storage</p>
+        <p>@Receipts.Quota.Used of @Receipts.Quota.Limit attachments used. @Receipts.Quota.Remaining remaining. Max file size: @(Receipts.Quota.MaxFileSizeKb / 1024) MB.</p>
+        <div class="hero-actions">
+            <a class="primary-button" href="receipts/upload">Upload receipt</a>
+        </div>
+    </div>
+}
+
+@if (Receipts?.Receipts.Count > 0)
+{
+    <div class="status-card compact-status">
+        <p class="status-label">Receipts</p>
+        @foreach (var receipt in Receipts.Receipts)
+        {
+            <article class="shopping-card finance-expense-card">
+                <div>
+                    <p class="chore-kicker">@receipt.FileType · uploaded by @(receipt.UploadedByName ?? "flatmate")</p>
+                    <h2>@receipt.Title</h2>
+                    <p>@(receipt.Amount is null ? "No amount" : Money(receipt.Amount.Value))</p>
+                </div>
+                <div class="chore-actions">
+                    @if (!string.IsNullOrWhiteSpace(receipt.Url))
+                    {
+                        <button type="button" class="action-link-button" @onclick="() => OpenReceipt(receipt.Url)">
+                            Open <span aria-hidden="true">›</span>
+                        </button>
+                    }
+                    <button type="button" class="action-link-button" @onclick="() => OnDelete.InvokeAsync(receipt.Id)" disabled="@IsSubmitting">
+                        Delete <span aria-hidden="true">›</span>
+                    </button>
+                </div>
+            </article>
+        }
+    </div>
+}
+else
+{
+    <div class="status-card compact-status">
+        <p class="status-label">No receipts yet</p>
+        <p>Upload receipts to keep proof of shared expenses.</p>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public ReceiptsResponse? Receipts { get; set; }
+
+    [Parameter]
+    public bool IsSubmitting { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnDelete { get; set; }
+
+    private void OpenReceipt(string url)
+    {
+        Navigation.NavigateTo($"receipt-viewer?url={Uri.EscapeDataString(url)}");
+    }
+
+    private static string Money(decimal amount)
+    {
+        return $"${amount:0.00}";
+    }
+}

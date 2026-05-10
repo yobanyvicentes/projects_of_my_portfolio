@@ -1,0 +1,219 @@
+@page "/notifications"
+@inject FlatApp.Mobile.Services.Flats.IFlatService FlatService
+@inject FlatApp.Mobile.Services.Activity.IActivityService ActivityService
+@inject NavigationManager Navigation
+
+<section class="placeholder-card">
+    <p class="status-label">Notifications</p>
+
+    @if (isLoading)
+    {
+        <h1>Loading notifications...</h1>
+        <p>Checking pending requests and recent flat updates.</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <h1>Unable to load notifications</h1>
+        <p>@errorMessage</p>
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadAsync">Try again</button>
+            <a class="secondary-button" href="dashboard">Back to dashboard</a>
+        </div>
+    }
+    else
+    {
+        <h1>Flat updates</h1>
+        <p>Review pending access requests and recent activity from your current flat.</p>
+
+        <div class="dashboard-grid finance-summary-grid" aria-label="Notification summary">
+            <a class="summary-tile" href="join-requests">
+                <span>⌁</span>
+                <strong>@PendingRequestSummary</strong>
+                <small>@PendingRequestHint</small>
+            </a>
+
+            <a class="summary-tile" href="activity">
+                <span>↻</span>
+                <strong>@ActivitySummary</strong>
+                <small>Recent updates</small>
+            </a>
+        </div>
+
+        @if (!isAdminNotificationAvailable)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">Admin notifications</p>
+                <p>Pending join requests are only visible to flat admins. Recent activity is still available below.</p>
+                <div class="hero-actions">
+                    <a class="secondary-button" href="activity">Open activity log</a>
+                </div>
+            </div>
+        }
+
+        @if (pendingRequests.Count > 0)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">Pending requests</p>
+                <p>@PendingRequestSummary waiting for admin review.</p>
+                @foreach (var request in pendingRequests)
+                {
+                    <div class="settings-row join-request-row">
+                        <div>
+                            <strong>@request.UserName wants to join</strong>
+                            <small>@request.UserEmail</small>
+                            <small>Requested @FormatDate(request.CreatedAt)</small>
+                        </div>
+                        <a class="settings-link" href="join-requests">Review</a>
+                    </div>
+                }
+                <div class="hero-actions">
+                    <a class="primary-button" href="join-requests">Review all requests</a>
+                </div>
+            </div>
+        }
+        else if (isAdminNotificationAvailable)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">Pending requests</p>
+                <p>No pending join requests right now. New requests will appear here and on the header bell badge.</p>
+                <div class="hero-actions">
+                    <a class="secondary-button" href="members">View members</a>
+                    <a class="secondary-button" href="settings">Invite flatmates</a>
+                </div>
+            </div>
+        }
+
+        @if (recentActivity.Count > 0)
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">Recent activity</p>
+                @foreach (var activity in recentActivity)
+                {
+                    <div class="settings-row activity-row">
+                        <div>
+                            <strong>@ActivityTitle(activity)</strong>
+                            <small>@(activity.Description ?? FormatAction(activity.Action))</small>
+                            <small>@ActorText(activity) · @FormatDate(activity.CreatedAt)</small>
+                        </div>
+                    </div>
+                }
+                <div class="hero-actions">
+                    <a class="secondary-button" href="activity">Open activity log</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="status-card compact-status">
+                <p class="status-label">Recent activity</p>
+                <p>No recent activity yet. Flat creation, join requests, member actions, and shared updates will appear here.</p>
+                <div class="hero-actions">
+                    <a class="secondary-button" href="dashboard">Back to dashboard</a>
+                    <a class="secondary-button" href="activity">Open activity log</a>
+                </div>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private bool isLoading = true;
+    private bool isAdminNotificationAvailable = true;
+    private string? errorMessage;
+    private List<FlatApp.Mobile.Models.Flats.FlatJoinRequest> pendingRequests = [];
+    private List<FlatApp.Mobile.Models.Activity.ActivityItem> recentActivity = [];
+
+    private string PendingRequestSummary => isAdminNotificationAvailable
+        ? pendingRequests.Count == 1 ? "1 request" : $"{pendingRequests.Count} requests"
+        : "Admin only";
+
+    private string PendingRequestHint => isAdminNotificationAvailable
+        ? pendingRequests.Count == 0 ? "No pending requests" : "Pending approval"
+        : "Requests restricted";
+
+    private string ActivitySummary => recentActivity.Count == 1 ? "1 update" : $"{recentActivity.Count} updates";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        pendingRequests = [];
+        recentActivity = [];
+        isAdminNotificationAvailable = true;
+
+        try
+        {
+            await Task.WhenAll(LoadPendingRequestsAsync(), LoadRecentActivityAsync());
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load notifications. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadPendingRequestsAsync()
+    {
+        try
+        {
+            pendingRequests = (await FlatService.GetJoinRequestsAsync()).ToList();
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 403)
+        {
+            isAdminNotificationAvailable = false;
+        }
+    }
+
+    private async Task LoadRecentActivityAsync()
+    {
+        recentActivity = (await ActivityService.GetAsync()).Take(8).ToList();
+    }
+
+    private static string ActivityTitle(FlatApp.Mobile.Models.Activity.ActivityItem activity)
+    {
+        return activity.Action switch
+        {
+            "flat.created" => "Flat created",
+            "join.requested" => "Join request sent",
+            "join.approved" => "Join request approved",
+            "join.rejected" => "Join request rejected",
+            "member.role.updated" => "Member role updated",
+            "member.removed" => "Member removed",
+            _ => FormatAction(activity.Action)
+        };
+    }
+
+    private static string FormatAction(string action)
+    {
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            return "Activity update";
+        }
+
+        return string.Join(' ', action.Replace('.', ' ').Replace('_', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()));
+    }
+
+    private static string ActorText(FlatApp.Mobile.Models.Activity.ActivityItem activity)
+    {
+        return string.IsNullOrWhiteSpace(activity.UserName) ? "Flat activity" : activity.UserName;
+    }
+
+    private static string FormatDate(DateTimeOffset? date)
+    {
+        return date?.ToLocalTime().ToString("dd MMM yyyy, h:mm tt") ?? "Recently";
+    }
+}

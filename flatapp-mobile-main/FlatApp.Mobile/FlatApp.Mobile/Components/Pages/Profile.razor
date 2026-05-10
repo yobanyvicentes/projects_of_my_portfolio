@@ -1,0 +1,406 @@
+@page "/profile"
+@inject FlatApp.Mobile.Services.Api.IApiClient ApiClient
+@inject NavigationManager Navigation
+
+<section class="placeholder-card profile-page">
+    <p class="status-label">Profile</p>
+    <h1>My profile</h1>
+    <p>Manage your flatmate contact details, emergency contact, payment details, and basic home information.</p>
+
+    @if (isLoading)
+    {
+        <div class="status-card compact-status">
+            <p class="status-label">Loading</p>
+            <p>Checking your current profile.</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+        <div class="hero-actions">
+            <button type="button" class="primary-button" @onclick="LoadAsync">Try again</button>
+            <a class="secondary-button" href="settings">Back to settings</a>
+        </div>
+    }
+    else if (profile is null)
+    {
+        <div class="status-card compact-status">
+            <p class="status-label">No profile</p>
+            <p>Create or join a flat before managing your profile.</p>
+            <div class="hero-actions">
+                <a class="primary-button" href="flat-onboarding">Create or join flat</a>
+                <a class="secondary-button" href="settings">Back to settings</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="alert alert-success">@successMessage</div>
+        }
+
+        <div class="profile-summary-card">
+            <div class="profile-avatar" aria-hidden="true">@Initial(profile.User.Name)</div>
+            <div>
+                <p class="status-label">Account</p>
+                <h2>@profile.User.Name</h2>
+                <p>@profile.User.Email</p>
+            </div>
+            <span>@FormatRole(profile.Role)</span>
+        </div>
+
+        <div class="profile-flat-card">
+            <div>
+                <p class="status-label">Current flat</p>
+                <h2>@profile.Flat.Name</h2>
+                <p>@(string.IsNullOrWhiteSpace(profile.Flat.Address) ? "No address saved" : profile.Flat.Address)</p>
+            </div>
+            <span>Home</span>
+        </div>
+
+        <EditForm Model="form" OnValidSubmit="SaveAsync" class="auth-form profile-form-card">
+            <DataAnnotationsValidator />
+
+            <div class="profile-form-section">
+                <p class="status-label">Contact details</p>
+                <p>These details help your flatmates contact you and handle shared payments more easily.</p>
+
+                <div class="form-group">
+                    <label for="profile-phone">Phone optional</label>
+                    <InputText id="profile-phone" class="flat-input" @bind-Value="form.Phone" placeholder="Example: 021 000 000" />
+                </div>
+
+                <div class="form-grid-two">
+                    <div class="form-group">
+                        <label for="profile-emergency-name">Emergency contact name optional</label>
+                        <InputText id="profile-emergency-name" class="flat-input" @bind-Value="form.EmergencyContactName" placeholder="Example: Alex Smith" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-emergency-phone">Emergency contact phone optional</label>
+                        <InputText id="profile-emergency-phone" class="flat-input" @bind-Value="form.EmergencyContactPhone" placeholder="Example: 022 333 444" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-form-section">
+                <p class="status-label">Payment details</p>
+                <p>Use this for reimbursements, shared bills, and settlement transfers.</p>
+
+                <div class="form-group">
+                    <label for="profile-bank-name">Bank account name optional</label>
+                    <InputText id="profile-bank-name" class="flat-input" @bind-Value="form.BankAccountName" placeholder="Example: Yobany Vicentes" />
+                </div>
+
+                <div class="form-group">
+                    <label for="profile-bank">Bank account number optional</label>
+                    <InputText id="profile-bank" class="flat-input" @bind-Value="form.BankAccountNumber" placeholder="Example: 12-3456-7890123-00" />
+                </div>
+
+                <div class="form-group">
+                    <label for="profile-notes">Notes optional</label>
+                    <InputTextArea id="profile-notes" class="flat-input profile-textarea" @bind-Value="form.Notes" placeholder="Example: prefers email reminders, vegetarian, works night shifts" />
+                </div>
+            </div>
+
+            @if (profile.Flat.CanManageHome)
+            {
+                <div class="profile-form-section admin-home-section">
+                    <p class="status-label">Admin home settings</p>
+                    <p>You are an admin, so you can update the current flat name and address.</p>
+
+                    <div class="form-group">
+                        <label for="profile-flat-name">Flat name</label>
+                        <InputText id="profile-flat-name" class="flat-input" @bind-Value="form.FlatName" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-flat-address">Flat address optional</label>
+                        <InputText id="profile-flat-address" class="flat-input" @bind-Value="form.FlatAddress" />
+                    </div>
+                </div>
+            }
+
+            <div class="hero-actions">
+                <button type="submit" class="primary-button" disabled="@isSaving">
+                    @(isSaving ? "Saving..." : "Save profile")
+                </button>
+                <a class="secondary-button" href="settings">Back to settings</a>
+            </div>
+        </EditForm>
+    }
+</section>
+
+<style>
+    .profile-page {
+        padding-bottom: 7rem;
+    }
+
+    .profile-summary-card,
+    .profile-flat-card,
+    .profile-form-card,
+    .profile-form-section {
+        border: 1px solid var(--flat-border);
+        border-radius: 1.2rem;
+        background: color-mix(in srgb, var(--flat-card) 92%, transparent);
+    }
+
+    .profile-summary-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: .9rem;
+        align-items: center;
+        margin-top: 1rem;
+        padding: 1rem;
+        border-color: color-mix(in srgb, var(--flat-primary) 35%, var(--flat-border));
+        background: color-mix(in srgb, var(--flat-primary) 7%, var(--flat-card));
+    }
+
+    .profile-avatar {
+        display: grid;
+        place-items: center;
+        width: 3rem;
+        height: 3rem;
+        border-radius: 999px;
+        color: var(--flat-primary);
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        background: color-mix(in srgb, var(--flat-primary) 8%, transparent);
+        font-weight: 950;
+    }
+
+    .profile-summary-card h2,
+    .profile-summary-card p,
+    .profile-flat-card h2,
+    .profile-flat-card p {
+        margin: 0;
+    }
+
+    .profile-summary-card h2,
+    .profile-flat-card h2 {
+        color: var(--flat-text);
+        font-size: 1.25rem;
+    }
+
+    .profile-summary-card p:last-child,
+    .profile-flat-card p:last-child {
+        color: var(--flat-muted);
+    }
+
+    .profile-summary-card > span,
+    .profile-flat-card > span {
+        padding: .3rem .65rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--flat-primary) 45%, var(--flat-border));
+        color: var(--flat-primary);
+        font-size: .72rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .profile-flat-card {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: .9rem;
+        margin-top: 1rem;
+        padding: 1rem;
+    }
+
+    .profile-form-card {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding: 1rem;
+    }
+
+    .profile-form-section {
+        display: grid;
+        gap: .85rem;
+        padding: 1rem;
+    }
+
+    .profile-form-section > p {
+        margin: 0;
+        color: var(--flat-muted);
+    }
+
+    .admin-home-section {
+        border-color: color-mix(in srgb, var(--flat-primary) 35%, var(--flat-border));
+    }
+
+    .profile-textarea {
+        min-height: 7rem;
+        resize: vertical;
+    }
+
+    @@media (max-width: 430px) {
+        .profile-summary-card {
+            grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .profile-summary-card > span {
+            grid-column: 1 / -1;
+            justify-self: start;
+        }
+
+        .profile-flat-card {
+            display: grid;
+        }
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private bool isSaving;
+    private string? errorMessage;
+    private string? successMessage;
+    private FlatApp.Mobile.Models.Profile.MemberProfile? profile;
+    private readonly ProfileForm form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var response = await ApiClient.GetAsync<FlatApp.Mobile.Models.Profile.MemberProfileResponse>("member-profile");
+            profile = response?.Profile;
+
+            if (profile is not null)
+            {
+                form.Phone = profile.Phone;
+                form.EmergencyContactName = profile.EmergencyContactName;
+                form.EmergencyContactPhone = profile.EmergencyContactPhone;
+                form.BankAccountName = profile.BankAccountName;
+                form.BankAccountNumber = profile.BankAccountNumber;
+                form.Notes = profile.Notes;
+                form.FlatName = profile.Flat.Name;
+                form.FlatAddress = profile.Flat.Address;
+            }
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 403)
+        {
+            errorMessage = "Create or join a flat before managing your profile.";
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to load your profile.");
+            Console.WriteLine($"Profile load failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load your profile. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var request = new FlatApp.Mobile.Models.Profile.UpdateMemberProfileRequest(
+                EmptyToNull(form.Phone),
+                EmptyToNull(form.EmergencyContactName),
+                EmptyToNull(form.EmergencyContactPhone),
+                EmptyToNull(form.BankAccountName),
+                EmptyToNull(form.BankAccountNumber),
+                EmptyToNull(form.Notes),
+                profile?.Flat.CanManageHome == true ? EmptyToNull(form.FlatName) : null,
+                profile?.Flat.CanManageHome == true ? EmptyToNull(form.FlatAddress) : null);
+
+            var response = await ApiClient.PutAsync<FlatApp.Mobile.Models.Profile.UpdateMemberProfileRequest, FlatApp.Mobile.Models.Profile.UpdateMemberProfileResponse>(
+                "member-profile",
+                request);
+
+            profile = response?.Profile ?? profile;
+            successMessage = response?.Message ?? "Profile updated.";
+
+            if (profile is not null)
+            {
+                form.Phone = profile.Phone;
+                form.EmergencyContactName = profile.EmergencyContactName;
+                form.EmergencyContactPhone = profile.EmergencyContactPhone;
+                form.BankAccountName = profile.BankAccountName;
+                form.BankAccountNumber = profile.BankAccountNumber;
+                form.Notes = profile.Notes;
+                form.FlatName = profile.Flat.Name;
+                form.FlatAddress = profile.Flat.Address;
+            }
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex) when (ex.StatusCode == 401)
+        {
+            Navigation.NavigateTo("login", replace: true);
+        }
+        catch (FlatApp.Mobile.Services.Api.ApiException ex)
+        {
+            errorMessage = ex.ToUserMessage("Unable to save your profile.");
+            Console.WriteLine($"Profile save failed: {ex.StatusCode} {ex.ResponseBody}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to save your profile. Please check your connection and try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private static string? EmptyToNull(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string Initial(string name)
+    {
+        return string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+    }
+
+    private static string FormatRole(string role)
+    {
+        return string.IsNullOrWhiteSpace(role)
+            ? "Flatmate"
+            : string.Join(' ', role.Split(['_', '-'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(word => char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()));
+    }
+
+    private sealed class ProfileForm
+    {
+        public string? Phone { get; set; }
+
+        public string? EmergencyContactName { get; set; }
+
+        public string? EmergencyContactPhone { get; set; }
+
+        public string? BankAccountName { get; set; }
+
+        public string? BankAccountNumber { get; set; }
+
+        public string? Notes { get; set; }
+
+        public string? FlatName { get; set; }
+
+        public string? FlatAddress { get; set; }
+    }
+}

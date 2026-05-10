@@ -1,0 +1,18 @@
+@using FlatApp.Mobile.Models.Finance
+
+@if (Finance is null)
+{
+    <div class="status-card compact-status">
+        <p class="status-label">Dashboard</p>
+        <p>No finance dashboard data is available yet.</p>
+    </div>
+}
+else
+{
+    <FinanceDashboardPanel Finance="Finance" />
+}
+
+@code {
+    [Parameter]
+    public FinanceResponse? Finance { get; set; }
+}
