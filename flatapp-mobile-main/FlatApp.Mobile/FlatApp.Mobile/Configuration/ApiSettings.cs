@@ -4,7 +4,7 @@ public sealed class ApiSettings
 {
     public const string SectionName = "Api";
 
-    public const string DefaultBaseUrl = "https://flat.yobany.top/api";
+    public const string DefaultBaseUrl = "";
 
     public string BaseUrl { get; init; } = ResolveBaseUrl();
 
