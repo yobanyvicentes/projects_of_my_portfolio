@@ -1,10 +1,12 @@
 # Colombia Education Market Intelligence | Research Data Pipeline
 
-Python-based research data pipeline for profiling, cleaning, standardising and reconciling postgraduate mobility data used in a portfolio and academic research workflow.
+Python-based research data pipeline for profiling, cleaning, standardising and reconciling postgraduate mobility data used in an academic research workflow.
+
+This folder is a **sanitised public snapshot** of the project. It contains code, methodology and synthetic demonstration data, while the working research repository and record-level research data remain private.
 
 ## Scope
 
-The implemented project focuses on reproducible data preparation rather than a finished web platform. It demonstrates:
+The implemented project focuses on reproducible data preparation rather than a finished web platform. It includes:
 
 - Excel/CSV ingestion and profiling
 - reproducible cleaning and deduplication
@@ -15,31 +17,31 @@ The implemented project focuses on reproducible data preparation rather than a f
 - audit and reconciliation scripts
 - research-oriented documentation
 
-Potential dashboards, APIs and web applications are future extensions and are not presented as implemented features.
+Dashboards, APIs and web applications are possible extensions, but they are not presented here as implemented components of this pipeline.
 
 ## Data and licensing notice
 
-This repository does **not** redistribute the original COLFUTURO dataset or public research outputs generated from identifiable or record-level source data.
+This public snapshot does **not** redistribute the original COLFUTURO dataset or record-level outputs generated from identifiable source data.
 
-Users who want to reproduce the research workflow with COLFUTURO data must obtain the source data independently and comply with the applicable COLFUTURO terms, privacy requirements and intellectual-property conditions.
+Anyone wishing to reproduce the research workflow with COLFUTURO data must obtain the relevant source data independently and comply with the applicable COLFUTURO terms, privacy requirements and intellectual-property conditions.
 
-The software license in this repository applies to the original code and documentation created for this project. It does not grant rights over third-party datasets.
+The software licence applies only to original code and documentation created for this project. It does not grant rights over third-party datasets.
 
 See [`DATA_NOTICE.md`](DATA_NOTICE.md) for details.
 
 ## Privacy approach
 
-The source workflow may process personal names for cleaning and duplicate detection. Names are removed from processed analytical outputs and replaced, where needed internally, with deterministic hashes.
+The working research pipeline may process personal names for cleaning and duplicate detection. Names are removed from analytical outputs and, where deterministic linkage is required internally, may be replaced by hashes.
 
-These hashes should be treated as **pseudonymous identifiers**, not as irreversible anonymisation. Record-level hashes and other person-level outputs are intentionally excluded from the public repository.
+Those hashes are treated as **pseudonymous identifiers**, not irreversible anonymisation. Record-level hashes and other person-level outputs are intentionally excluded from this public snapshot.
 
-## Repository structure
+## Project structure
 
 ```text
 .
 ├── data/
-│   ├── raw/          # local source data; never versioned
-│   ├── processed/    # generated analytical data; never versioned
+│   ├── raw/          # local source data; never published
+│   ├── processed/    # generated analytical data; never published
 │   └── sample/       # synthetic demonstration data only
 ├── etl/
 │   └── src/
@@ -48,13 +50,13 @@ These hashes should be treated as **pseudonymous identifiers**, not as irreversi
 │       ├── standardisation/
 │       └── analysis/
 ├── docs/             # methodology and technical documentation
-├── reports/          # generated locally; real-data outputs are ignored
+├── reports/          # generated locally; real-data outputs are excluded
 └── README.md
 ```
 
 ## Synthetic sample
 
-`data/sample/colfuturo_sample_synthetic.csv` contains entirely fictional records created only to illustrate the expected analytical structure. It is not extracted from COLFUTURO and must not be interpreted as real student data.
+`data/sample/colfuturo_sample_synthetic.csv` contains fictional records created only to illustrate the expected analytical structure. It is not an extract or transformation of real COLFUTURO records.
 
 ## Technologies
 
@@ -66,24 +68,38 @@ These hashes should be treated as **pseudonymous identifiers**, not as irreversi
 - ROR-based organisation matching
 - Git/GitHub
 
-## Local setup
+## Running the public snapshot locally
+
+Clone the public portfolio repository and enter this project folder:
 
 ```bash
-git clone https://github.com/yobanyvicentes/colombia-education-market-intelligence.git
-cd colombia-education-market-intelligence
+git clone https://github.com/yobanyvicentes/projects_of_my_portfolio.git
+cd projects_of_my_portfolio/colombia-education-market-intelligence-main
 python -m venv .venv
+```
+
+Activate the virtual environment using the command appropriate for the operating system, then install the ETL dependencies:
+
+```bash
 pip install -r etl/requirements.txt
 ```
 
-The production research pipeline expects source files in `data/raw/`, which is intentionally excluded from version control. Generated processed datasets and reports are also excluded.
+The production research workflow expects source files in `data/raw/`, which is intentionally excluded from the public snapshot. Generated processed datasets and real-data reports are also excluded.
 
 ## Research use case
 
-The project was developed to support analysis of Colombian postgraduate destination patterns, including comparative interest in Australia and New Zealand, while maintaining a reproducible data-cleaning and entity-resolution methodology.
+The project supports analysis of Colombian postgraduate destination patterns, including comparative interest in Australia and New Zealand, while preserving a reproducible data-cleaning and entity-resolution methodology.
 
-## Portfolio value
+## What this snapshot demonstrates
 
-This repository demonstrates practical work in data engineering, data quality, entity resolution, research reproducibility and analytical workflow design without publishing third-party source datasets or person-level research data.
+The published code provides evidence of practical work in:
+
+- data engineering
+- data quality and profiling
+- entity resolution
+- research reproducibility
+- audit-oriented analytical workflows
+- privacy-aware publication of research code
 
 ## Author
 
