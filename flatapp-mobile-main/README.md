@@ -1,133 +1,88 @@
 # FlatNZ Mobile
 
-FlatNZ Mobile is the native mobile companion app for FlatNZ, built with **.NET MAUI Blazor Hybrid**.
-
-It is designed for flatmates who need a practical mobile-first tool to manage shared living: home setup, member access, chores, shopping, expenses, receipts, and activity tracking, all connected to a Laravel backend API.
-
----
-
-## What this project is
-
-FlatNZ Mobile is part of the wider **FlatNZ ecosystem**, a flatmate management platform focused on real shared-house workflows.
-
-The mobile app is not just a demo shell. It already supports core user and household operations such as:
-
-- authentication
-- flat creation and join flows
-- join request review
-- member visibility
-- chores
-- shopping
-- finance and balances
-- receipts
-- activity history
-- privacy and account deletion flows
-
-This repository is mainly intended for:
-
-- technical reviewers
-- recruiters evaluating architecture and implementation quality
-- developers maintaining or extending the mobile app
-- testers generating Android review builds
-
----
-
-## Product focus
-
-FlatNZ helps flatmates reduce friction in shared living by centralising the kinds of tasks that usually get scattered across chats, screenshots, notes, and bank transfers.
-
-The mobile experience is focused on:
-
-- clear household ownership and membership flows
-- shared task coordination
-- shopping-to-finance continuity
-- receipt-backed expense tracking
-- admin review flows for access requests
-- privacy and account controls appropriate for store publishing
-
----
+FlatNZ Mobile is a .NET MAUI Blazor Hybrid client for the FlatApp shared-living platform. It provides a mobile interface for household membership, chores, shopping, finance-related workflows, receipts and activity tracking through the Laravel backend API.
 
 ## Current capabilities
 
-The app currently includes:
-
 ### Authentication and account
-- Login
-- Registration
-- Logout
-- Secure token storage
-- In-app privacy policy
-- In-app account deletion request flow
+
+- registration and login
+- logout
+- secure token storage
+- in-app privacy information
+- account deletion request flow
 
 ### Flats and membership
-- Create flat flow
-- Join flat request flow
-- Current flat switching
-- Invite-code display
-- Clipboard copy for invite codes
-- Members screen with active flatmates and roles
-- Admin join-request review with approve/reject actions
 
-### Household operations
-- Dashboard with module shortcuts
-- Activity preview and activity log screen
-- Bottom navigation for Home, Chores, Shopping, Finance, and Settings
+- create a flat
+- request to join a flat
+- switch the active flat
+- display and copy invite codes
+- view household members and roles
+- approve or reject join requests when authorised
 
-### Chores
-- List chores
-- Create chores
-- Edit chores
-- Complete chores
-- Archive/remove chores
+### Household workflows
 
-### Shopping
-- Add shopping items
-- Deactivate/reactivate items
-- Purchase flow connected to finance
+- dashboard and activity history
+- create, edit, complete and archive chores
+- add, deactivate, reactivate and purchase shopping items
+- view expenses and balances
+- record settlements/payments
+- manage receipts
+- upload JPG, PNG and PDF receipt files
 
-### Finance and receipts
-- Expense tracking
-- Balances
-- Settlements/payments
-- Receipt management
-- Receipt upload for JPG, PNG, and PDF
+## Technology stack
 
-### UX
-- Styled confirmation dialogs for sensitive actions
-- Mobile-first dark UI with black, white, and bright blue accents
+- .NET MAUI
+- Blazor Hybrid
+- C#
+- typed HTTP services
+- Laravel API backend
+- Laravel Sanctum bearer-token authentication
 
----
+The project targets Android and also includes MAUI target configuration for iOS, Mac Catalyst and Windows where the development platform supports those targets.
 
-## Tech stack
+## Architecture
 
-- **.NET MAUI**
-- **Blazor Hybrid**
-- **C#**
-- **Typed HTTP services**
-- **Laravel API backend**
-- **Laravel Sanctum bearer-token authentication**
+The application separates interface code from HTTP and configuration concerns:
 
----
+- `Components/` — pages and reusable UI components
+- `Services/` — domain-specific API clients
+- `Configuration/` — runtime settings, including API configuration
+- `Resources/` — icons, splash assets, images and fonts
+- `Platforms/` — platform-specific settings
 
-## Architecture notes
+This keeps API access outside the UI components and makes individual household modules easier to maintain.
 
-The app uses a service-oriented mobile structure where UI pages call typed HTTP services instead of mixing transport logic directly into the components.
+## Backend API
 
-Key project areas include:
+The default production API is:
 
-- `Components/` for pages and UI composition
-- `Services/` for domain-specific API access
-- `Configuration/` for runtime settings such as API base URL
-- `Resources/` for app icons, splash assets, images, and fonts
-- `Platforms/` for Android and platform-specific configuration
-
-This structure makes the project easier to review, maintain, and evolve.
-
----
-
-## API base URL
-
-The mobile app currently targets:
-
-```txt
+```text
 https://flat.yobany.top/api
+```
+
+The API configuration is maintained in the mobile project's `Configuration` area. For local or staging development, use the project's supported environment/configuration mechanism to point the client at the appropriate backend.
+
+## Running the Android project
+
+From the application project directory:
+
+```bash
+dotnet restore
+dotnet build -f net10.0-android
+```
+
+To run on a connected Android device or emulator:
+
+```bash
+dotnet build -t:Run -f net10.0-android
+```
+
+## Relationship to FlatApp
+
+This repository contains the mobile client. The Laravel web application and backend workflows are included separately in this portfolio under `flatapp`.
+
+## Scope
+
+FlatNZ Mobile is a client application and therefore depends on a reachable FlatApp API for authenticated and household operations. The repository documents the mobile implementation itself rather than presenting the backend as part of the same codebase.
