@@ -1,0 +1,13 @@
+Prom,Nombre,Género,Región Origen,Univ. Pregrado,Pregrado,Univ. Posgrado,País,Ciudad Destino,Tipo,Posgrado,Área,Estado,Tags
+2021,Synthetic Person 001,Femenino,Bogotá,Universidad Ejemplo Uno,Administración,Example University Pacific A,Australia,Sydney,Maestría,Master of Analytics,Administración Y Negocios,Seleccionado,synthetic
+2021,Synthetic Person 002,Masculino,Antioquia,Universidad Ejemplo Dos,Ingeniería,Example University Pacific B,Nueva Zelanda,Auckland,Doctorado,PhD in Engineering,Ingeniería,Beneficiario,synthetic
+2022,Synthetic Person 003,Femenino,Valle,Universidad Ejemplo Tres,Economía,Example University Pacific C,Australia,Melbourne,Maestría,Master of Economics,Economía,Beneficiario,synthetic
+2022,Synthetic Person 004,Masculino,Caribe,Universidad Ejemplo Uno,Derecho,Example University Pacific D,Nueva Zelanda,Wellington,Maestría,Master of Public Policy,Derecho,Seleccionado,synthetic
+2022,Synthetic Person 005,Femenino,Cundinamarca,Universidad Ejemplo Cuatro,Diseño,Example University Pacific A,Australia,Sydney,Maestría,Master of Design,Arquitectura Y Diseño,Beneficiario,synthetic
+2023,Synthetic Person 006,Masculino,Santander,Universidad Ejemplo Dos,Ingeniería,Example University Pacific E,Australia,Brisbane,Doctorado,PhD in Data Systems,Ingeniería,Seleccionado,synthetic
+2023,Synthetic Person 007,Femenino,Bogotá,Universidad Ejemplo Tres,Ciencias Sociales,Example University Pacific F,Nueva Zelanda,Christchurch,Doctorado,PhD in Social Research,Ciencias Sociales,Beneficiario,synthetic
+2023,Synthetic Person 008,Masculino,Antioquia,Universidad Ejemplo Cinco,Administración,Example University Pacific C,Australia,Melbourne,Maestría,Master of Management,Administración Y Negocios,Beneficiario,synthetic
+2024,Synthetic Person 009,Femenino,Valle,Universidad Ejemplo Uno,Artes,Example University Pacific G,Nueva Zelanda,Dunedin,Maestría,Master of Arts,Artes,Seleccionado,synthetic
+2024,Synthetic Person 010,Masculino,Bogotá,Universidad Ejemplo Cuatro,Ciencias,Example University Pacific B,Australia,Perth,Doctorado,PhD in Science,Ciencias Básicas,Beneficiario,synthetic
+2024,Synthetic Person 011,Femenino,Caribe,Universidad Ejemplo Cinco,Relaciones Internacionales,Example University Pacific D,Nueva Zelanda,Wellington,Maestría,Master of International Relations,Ciencias Políticas Y Relaciones Internacionales,Seleccionado,synthetic
+2024,Synthetic Person 012,Masculino,Cundinamarca,Universidad Ejemplo Dos,Ingeniería,Example University Pacific E,Australia,Brisbane,Maestría,Master of Engineering,Ingeniería,Beneficiario,synthetic

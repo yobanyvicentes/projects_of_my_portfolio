@@ -1,0 +1,45 @@
+name: Public repository safety
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  public-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Block tracked research data and generated reports
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          forbidden_data="$(
+            git ls-files \
+              | grep -E '^data/(raw|processed|reference)/' \
+              | grep -vE '^data/(raw|processed)/README\.md$' \
+              || true
+          )"
+
+          forbidden_reports="$(
+            git ls-files \
+              | grep -E '^reports/' \
+              | grep -vE '^reports/README\.md$' \
+              || true
+          )"
+
+          if [[ -n "$forbidden_data" ]]; then
+            echo "Forbidden tracked research-data files detected:"
+            echo "$forbidden_data"
+            exit 1
+          fi
+
+          if [[ -n "$forbidden_reports" ]]; then
+            echo "Forbidden tracked generated-report files detected:"
+            echo "$forbidden_reports"
+            exit 1
+          fi
+
+          echo "Public-repository data boundary check passed."
